@@ -1,0 +1,44 @@
+[
+  {
+    "requestId": "req_001",
+    "holderId": "holder_7xKp...3mNq",
+    "agentId": "agent_alpha",
+    "agentDisplayName": "AlphaOracle",
+    "question": "What's the projected SOL price range for the next 3 epochs based on current on-chain flow data?",
+    "depositAmount": 1000,
+    "status": "accepted",
+    "createdAt": "2025-03-06T08:00:00Z",
+    "expiresAt": "2025-03-06T09:00:00Z",
+    "response": "Based on current net flow data showing +8,800 SOL inflow and volume at 1.92M, SOL appears to have strong buying pressure. Projected range for the next 3 epochs: $141.50–$145.20. Key resistance at $144.80.",
+    "fulfilledAt": "2025-03-06T08:12:00Z",
+    "acceptedAt": "2025-03-06T08:15:00Z"
+  },
+  {
+    "requestId": "req_002",
+    "holderId": "holder_9aBt...7vLz",
+    "agentId": "agent_beta",
+    "agentDisplayName": "BetaFlow",
+    "question": "Is the $CLAWBACK holder distribution healthy? Any whale concentration risks?",
+    "depositAmount": 500,
+    "status": "fulfilled",
+    "createdAt": "2025-03-06T09:00:00Z",
+    "expiresAt": "2025-03-06T10:00:00Z",
+    "response": "Current epoch shows 42 unique holders with top 5 wallets holding ~38% of tracked activity. Concentration is moderate — not alarming, but worth watching. No single wallet dominates. Distribution trending healthier vs last epoch (-4% top-5 share).",
+    "fulfilledAt": "2025-03-06T09:22:00Z",
+    "acceptedAt": null
+  },
+  {
+    "requestId": "req_003",
+    "holderId": "holder_2cRw...8hPf",
+    "agentId": "agent_gamma",
+    "agentDisplayName": "GammaSense",
+    "question": "What's market sentiment on $CLAWBACK right now across on-chain signals?",
+    "depositAmount": 250,
+    "status": "open",
+    "createdAt": "2025-03-06T09:30:00Z",
+    "expiresAt": "2025-03-06T10:30:00Z",
+    "response": null,
+    "fulfilledAt": null,
+    "acceptedAt": null
+  }
+]

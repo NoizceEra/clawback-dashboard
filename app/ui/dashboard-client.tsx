@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AddressStats, EpochSummary } from "../../types/epoch";
 import type { AgentPoolSummary } from "../../types/agent";
+import { IntelMarketplace } from "./intel-marketplace";
 
 function numberFormat(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 4 });
@@ -416,6 +417,14 @@ export function DashboardClient(): React.JSX.Element {
             </p>
           </div>
         </section>
+      )}
+
+      {/* ── Intel Marketplace ── */}
+      {agentPool && (
+        <IntelMarketplace
+          agents={agentPool.topAgents}
+          holderId="holder_demo"
+        />
       )}
 
       {/* ── Wallet Lookup ── */}

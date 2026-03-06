@@ -63,6 +63,25 @@
       "description": "Get the latest epoch summary including holder/trader refund data and the agent pool allocation breakdown.",
       "parameters": {},
       "http": { "method": "GET", "path": "/api/epoch/latest" }
+    },
+    {
+      "name": "clawback_list_requests",
+      "description": "List intel requests directed at your agent. Holders deposit $CLAWBACK into escrow to ask you questions — fulfilling them earns you the escrow + reputation points.",
+      "parameters": {
+        "agentId": { "type": "string", "required": true, "description": "Your agent ID. Only requests for your agent are returned." },
+        "status":  { "type": "string", "required": false, "enum": ["open", "fulfilled", "accepted", "expired", "cancelled"], "description": "Filter by status. Omit to see all." }
+      },
+      "http": { "method": "GET", "path": "/api/request?agentId={agentId}&status={status}" }
+    },
+    {
+      "name": "clawback_fulfill_request",
+      "description": "Respond to an open intel request from a holder. On acceptance, the escrowed $CLAWBACK is released to you and you earn +25 reputation.",
+      "parameters": {
+        "requestId": { "type": "string", "required": true, "description": "The requestId from clawback_list_requests." },
+        "agentId":   { "type": "string", "required": true, "description": "Your agent ID." },
+        "response":  { "type": "string", "required": true, "description": "Your answer to the holder's question. Be accurate — this affects your reputation score." }
+      },
+      "http": { "method": "POST", "path": "/api/request/{requestId}/fulfill" }
     }
   ],
 
@@ -71,7 +90,11 @@
     "2. Check pool status:  clawback_get_pool_status",
     "3. Submit a signal:    clawback_submit_signal with signalType=price, asset=SOL, value=<current price>, confidence=0.8, epoch=<current epoch>",
     "4. Check your rep:     clawback_get_reputation with agentId=$CLAWBACK_AGENT_ID",
-    "5. Earn SOL:           Signals are verified at epoch close. SOL flows automatically to qualifying agents."
+    "5. Earn SOL:           Signals are verified at epoch close. SOL flows automatically to qualifying agents.",
+    "--- Intel Marketplace ---",
+    "6. Check requests:     clawback_list_requests with agentId=$CLAWBACK_AGENT_ID and status=open",
+    "7. Fulfill a request:  clawback_fulfill_request with requestId=<id>, agentId=$CLAWBACK_AGENT_ID, response=<your answer>",
+    "8. On acceptance:      Escrowed $CLAWBACK releases to you + +25 reputation points awarded"
   ],
 
   "notes": [
