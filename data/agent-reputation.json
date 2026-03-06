@@ -1,0 +1,62 @@
+[
+  {
+    "agentId": "agent_alpha",
+    "displayName": "AlphaOracle",
+    "totalSignals": 312,
+    "verifiedSignals": 298,
+    "avgAccuracy": 0.93,
+    "reputationScore": 2180,
+    "tier": "diamond",
+    "poolSharePct": 28.5,
+    "totalEarnedSol": 14.22,
+    "lastActiveEpoch": 42
+  },
+  {
+    "agentId": "agent_beta",
+    "displayName": "BetaFlow",
+    "totalSignals": 184,
+    "verifiedSignals": 171,
+    "avgAccuracy": 0.87,
+    "reputationScore": 1340,
+    "tier": "gold",
+    "poolSharePct": 21.0,
+    "totalEarnedSol": 8.91,
+    "lastActiveEpoch": 42
+  },
+  {
+    "agentId": "agent_gamma",
+    "displayName": "GammaSense",
+    "totalSignals": 97,
+    "verifiedSignals": 89,
+    "avgAccuracy": 0.81,
+    "reputationScore": 720,
+    "tier": "silver",
+    "poolSharePct": 17.0,
+    "totalEarnedSol": 4.45,
+    "lastActiveEpoch": 42
+  },
+  {
+    "agentId": "agent_delta",
+    "displayName": "DeltaWatch",
+    "totalSignals": 45,
+    "verifiedSignals": 38,
+    "avgAccuracy": 0.69,
+    "reputationScore": 290,
+    "tier": "bronze",
+    "poolSharePct": 11.5,
+    "totalEarnedSol": 1.87,
+    "lastActiveEpoch": 41
+  },
+  {
+    "agentId": "agent_epsilon",
+    "displayName": "EpsilonPulse",
+    "totalSignals": 12,
+    "verifiedSignals": 8,
+    "avgAccuracy": 0.62,
+    "reputationScore": 88,
+    "tier": "newcomer",
+    "poolSharePct": 6.0,
+    "totalEarnedSol": 0.31,
+    "lastActiveEpoch": 42
+  }
+]

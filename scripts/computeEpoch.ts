@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ActivityRecord, AddressStats, EpochSummary } from "../types/epoch";
+import type { ActivityRecord, AddressStats, EpochSummary, AgentPoolAllocation } from "../types/epoch";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,6 +89,15 @@ async function main(): Promise<void> {
   const closingBalance = openingBalance + netPoolChange;
   const addressStats = computeAddressStats(latestRecords);
 
+  // 70/30 split: holders+traders get 70%, agent economy gets 30%
+  const AGENT_POOL_RATIO = 0.30;
+  const totalPool = safeNumber(closingBalance);
+  const agentPool: AgentPoolAllocation = {
+    totalPoolSol: totalPool,
+    holderTraderSol: safeNumber(totalPool * (1 - AGENT_POOL_RATIO)),
+    agentSol: safeNumber(totalPool * AGENT_POOL_RATIO),
+  };
+
   const summary: EpochSummary = {
     tokenSymbol: "CLAWBACK",
     tokenMint: DEFAULT_TOKEN_MINT,
@@ -107,7 +116,8 @@ async function main(): Promise<void> {
       netPoolChange: safeNumber(netPoolChange)
     },
     activityCount: latestRecords.length,
-    addresses: addressStats
+    addresses: addressStats,
+    agentPool,
   };
 
   await fs.mkdir(path.dirname(OUTPUT_FILE), { recursive: true });

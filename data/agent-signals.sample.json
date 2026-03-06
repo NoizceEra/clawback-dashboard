@@ -1,0 +1,10 @@
+[
+  { "signalId": "sig_001", "agentId": "agent_alpha",  "epoch": 42, "timestamp": "2025-03-06T09:00:00Z", "signalType": "price",     "asset": "SOL",     "value": 142.80, "confidence": 0.91, "verified": true, "accuracyScore": 0.95 },
+  { "signalId": "sig_002", "agentId": "agent_beta",   "epoch": 42, "timestamp": "2025-03-06T09:01:00Z", "signalType": "volume",    "asset": "CLAWBACK","value": 285000, "confidence": 0.78, "verified": true, "accuracyScore": 0.83 },
+  { "signalId": "sig_003", "agentId": "agent_gamma",  "epoch": 42, "timestamp": "2025-03-06T09:02:00Z", "signalType": "flow",      "asset": "SOL",     "value": -12400, "confidence": 0.85, "verified": true, "accuracyScore": 0.88 },
+  { "signalId": "sig_004", "agentId": "agent_alpha",  "epoch": 42, "timestamp": "2025-03-06T09:05:00Z", "signalType": "sentiment", "asset": "CLAWBACK","value": 0.72,   "confidence": 0.67, "verified": true, "accuracyScore": 0.79 },
+  { "signalId": "sig_005", "agentId": "agent_delta",  "epoch": 42, "timestamp": "2025-03-06T09:07:00Z", "signalType": "price",     "asset": "SOL",     "value": 143.10, "confidence": 0.55, "verified": true, "accuracyScore": 0.61 },
+  { "signalId": "sig_006", "agentId": "agent_beta",   "epoch": 42, "timestamp": "2025-03-06T09:10:00Z", "signalType": "flow",      "asset": "SOL",     "value": 8800,   "confidence": 0.80, "verified": false,"accuracyScore": null },
+  { "signalId": "sig_007", "agentId": "agent_epsilon","epoch": 42, "timestamp": "2025-03-06T09:12:00Z", "signalType": "volume",    "asset": "SOL",     "value": 1920000,"confidence": 0.90, "verified": false,"accuracyScore": null },
+  { "signalId": "sig_008", "agentId": "agent_gamma",  "epoch": 42, "timestamp": "2025-03-06T09:15:00Z", "signalType": "price",     "asset": "CLAWBACK","value": 0.0034, "confidence": 0.73, "verified": true, "accuracyScore": 0.86 }
+]

@@ -2,7 +2,7 @@
   "tokenSymbol": "CLAWBACK",
   "tokenMint": "PLACEHOLDER_TOKEN_MINT_ADDRESS",
   "treasuryAddress": "PLACEHOLDER_TREASURY_ADDRESS",
-  "generatedAt": "2026-03-06T19:00:54.885Z",
+  "generatedAt": "2026-03-06T20:22:56.278Z",
   "epochId": 101,
   "epochStart": "2026-03-03T00:40:00.000Z",
   "epochEnd": "2026-03-05T07:05:00.000Z",
@@ -44,5 +44,10 @@
       "netChange": -100.1,
       "activityCount": 1
     }
-  ]
+  ],
+  "agentPool": {
+    "totalPoolSol": 3565.87,
+    "holderTraderSol": 2496.109,
+    "agentSol": 1069.761
+  }
 }

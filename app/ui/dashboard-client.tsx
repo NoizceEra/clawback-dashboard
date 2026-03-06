@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { AddressStats, EpochSummary } from "../../types/epoch";
+import type { AgentPoolSummary } from "../../types/agent";
 
 function numberFormat(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 4 });
@@ -59,6 +60,7 @@ export function DashboardClient(): React.JSX.Element {
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [agentPool, setAgentPool] = useState<AgentPoolSummary | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -74,6 +76,13 @@ export function DashboardClient(): React.JSX.Element {
           setSummary(payload);
           setSelectedAddress(payload.addresses[0]?.address ?? "");
           setError("");
+        }
+
+        // Load agent pool in parallel
+        const agentRes = await fetch("/api/agent/pool");
+        if (agentRes.ok) {
+          const agentPayload = (await agentRes.json()) as AgentPoolSummary;
+          if (active) setAgentPool(agentPayload);
         }
       } catch (caught) {
         if (active) setError(caught instanceof Error ? caught.message : "Unknown error");
@@ -119,6 +128,14 @@ export function DashboardClient(): React.JSX.Element {
   }, [summary]);
 
   const treasuryAmount = summary?.closingBalance ?? 0;
+
+  const TIER_STYLE: Record<string, { bg: string; color: string; label: string }> = {
+    diamond:  { bg: "#ede9fe", color: "#7c3aed", label: "💎 Diamond" },
+    gold:     { bg: "#fef9c3", color: "#92400e", label: "🥇 Gold" },
+    silver:   { bg: "#f1f5f9", color: "#475569", label: "🥈 Silver" },
+    bronze:   { bg: "#ffedd5", color: "#9a3412", label: "🥉 Bronze" },
+    newcomer: { bg: "#f0fdf4", color: "#166534", label: "🌱 Newcomer" },
+  };
 
   if (loading) {
     return (
@@ -300,6 +317,106 @@ export function DashboardClient(): React.JSX.Element {
         </article>
 
       </section>
+
+      {/* ── Agent Economy ── */}
+      {agentPool && (
+        <section style={{ marginBottom: "24px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "18px" }}>
+            <span style={{ fontSize: "1.6rem" }}>🤖</span>
+            <div>
+              <div style={{ fontSize: "0.72rem", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--pink)" }}>
+                A2A Economy
+              </div>
+              <div style={{ fontSize: "1.2rem", fontWeight: 900, color: "var(--ink)" }}>Agent Reward Pool</div>
+            </div>
+            <a
+              href="/skills/clawback-agent-skill.json"
+              download
+              style={{
+                marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "6px",
+                padding: "8px 16px", borderRadius: "999px", border: "1.5px solid var(--purple)",
+                color: "var(--purple)", background: "var(--purple-lt)", fontWeight: 800,
+                fontSize: "0.82rem", textDecoration: "none", transition: "all 0.2s",
+              }}
+            >
+              ⬇ Download Skill
+            </a>
+          </div>
+
+          {/* Split bar */}
+          <div className="card" style={{ marginBottom: "18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
+              <span style={{ fontWeight: 800, fontSize: "0.9rem", color: "var(--ink-soft)" }}>Pool split this epoch</span>
+              <span style={{ fontWeight: 700, fontSize: "0.85rem", color: "var(--ink-muted)" }}>
+                {solFormat(agentPool.totalPoolSol)} total
+              </span>
+            </div>
+            <div style={{ display: "flex", borderRadius: "99px", overflow: "hidden", height: "14px", marginBottom: "14px" }}>
+              <div style={{ flex: 70, background: "linear-gradient(90deg, var(--purple), var(--pink))" }} title="70% holders & traders" />
+              <div style={{ flex: 30, background: "linear-gradient(90deg, var(--mint), var(--sky))" }} title="30% agents" />
+            </div>
+            <div style={{ display: "flex", gap: "24px", fontSize: "0.85rem" }}>
+              <div>
+                <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "3px", background: "var(--purple)", marginRight: 6 }} />
+                <strong>70%</strong> Holders &amp; Traders — {solFormat(agentPool.holderTraderAllocationSol)}
+              </div>
+              <div>
+                <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "3px", background: "var(--mint)", marginRight: 6 }} />
+                <strong>30%</strong> Agents — {solFormat(agentPool.agentAllocationSol)}
+              </div>
+            </div>
+          </div>
+
+          {/* Agent leaderboard */}
+          <div className="card">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div className="section-title" style={{ color: "var(--mint)", margin: 0 }}>
+                Signal Leaderboard — Epoch #{agentPool.epochId}
+              </div>
+              <div style={{ fontSize: "0.8rem", color: "var(--ink-muted)", fontWeight: 600 }}>
+                {agentPool.activeAgents} active agents &bull; {agentPool.totalSignalsThisEpoch} signals
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {agentPool.topAgents.map((agent, i) => {
+                const tier = TIER_STYLE[agent.tier] ?? TIER_STYLE.newcomer;
+                return (
+                  <div key={agent.agentId} style={{
+                    display: "flex", alignItems: "center", gap: "12px",
+                    padding: "12px 14px", borderRadius: "14px",
+                    background: i === 0 ? "linear-gradient(135deg, #f5f0ff, #fff0f9)" : "var(--bg)",
+                    border: `1.5px solid ${i === 0 ? "rgba(168,85,247,0.3)" : "var(--line)"}`,
+                  }}>
+                    <div style={{ fontWeight: 900, fontSize: "1.1rem", color: "var(--ink-muted)", width: "24px", textAlign: "center" }}>
+                      {i + 1}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "var(--ink)" }}>{agent.displayName}</div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--ink-muted)" }}>
+                        {agent.totalSignals} signals &bull; {(agent.avgAccuracy * 100).toFixed(0)}% accuracy
+                      </div>
+                    </div>
+                    <div style={{ padding: "3px 10px", borderRadius: "999px", background: tier.bg, color: tier.color, fontSize: "0.72rem", fontWeight: 800 }}>
+                      {tier.label}
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontWeight: 900, fontSize: "0.95rem", color: "var(--purple)" }}>{agent.poolSharePct}%</div>
+                      <div style={{ fontSize: "0.72rem", color: "var(--ink-muted)" }}>pool share</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontWeight: 900, fontSize: "0.95rem", color: "var(--mint)" }}>{solFormat(agent.totalEarnedSol)}</div>
+                      <div style={{ fontSize: "0.72rem", color: "var(--ink-muted)" }}>earned total</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p style={{ margin: "16px 0 0", fontSize: "0.8rem", color: "var(--ink-muted)", lineHeight: 1.6 }}>
+              Agents earn reputation by submitting accurate market signals each epoch. Bronze tier and above share the 30% agent allocation proportionally. Download the skill above to join.
+            </p>
+          </div>
+        </section>
+      )}
 
       {/* ── Wallet Lookup ── */}
       <section className="card" aria-label="Wallet lookup">

@@ -20,6 +20,12 @@ export type AddressStats = {
   activityCount: number;
 };
 
+export type AgentPoolAllocation = {
+  totalPoolSol: number;
+  holderTraderSol: number; // 70%
+  agentSol: number;        // 30%
+};
+
 export type EpochSummary = {
   tokenSymbol: "CLAWBACK";
   tokenMint: string;
@@ -39,4 +45,5 @@ export type EpochSummary = {
   };
   activityCount: number;
   addresses: AddressStats[];
+  agentPool: AgentPoolAllocation;
 };
