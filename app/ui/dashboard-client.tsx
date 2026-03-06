@@ -172,9 +172,9 @@ export function DashboardClient(): React.JSX.Element {
       {/* ── Header ── */}
       <header className="header">
         <div className="header-badge">
-          <span>✨</span> Live Rewards
+          <span>🦞</span> Live Rewards
         </div>
-        <h1>CLawback Rewards</h1>
+        <h1>$CLAWBACK Rewards</h1>
         <p className="tagline">
           Every 10 minutes, a slice of creator rewards flows back to traders who need it most. No staking, no drama.
         </p>
@@ -184,9 +184,9 @@ export function DashboardClient(): React.JSX.Element {
       <section className="hero-row">
 
         <article className="hero-card">
-          <h2 className="hero-title">What is CLawback? 🐱</h2>
+          <h2 className="hero-title">What is $CLAWBACK? 🦞</h2>
           <p className="hero-subtitle">
-            CLawback scoops a portion of creator rewards and redistributes it as SOL refunds to holders who had a rough
+            $CLAWBACK scoops a portion of creator rewards and redistributes it as SOL refunds to holders who had a rough
             trading session. Think of it as a soft landing for bad days.
           </p>
           <div className="hero-pill-row">
@@ -195,7 +195,7 @@ export function DashboardClient(): React.JSX.Element {
             <span className="hero-pill">🎉 No staking needed</span>
           </div>
           <p className="hero-footnote">
-            To qualify: hold CLawback tokens above the minimum, have recent on-chain trades, and have taken some
+            To qualify: hold $CLAWBACK tokens above the minimum, have recent on-chain trades, and have taken some
             realized losses. Bigger losses + bigger bags = higher priority.
           </p>
         </article>
@@ -242,7 +242,7 @@ export function DashboardClient(): React.JSX.Element {
           value={solFormat(treasuryAmount)}
           valueColor="var(--purple)"
           accentColor="var(--purple)"
-          body="The total SOL sitting in the CLawback treasury, waiting to flow out to eligible traders."
+          body="The total SOL sitting in the $CLAWBACK treasury, waiting to flow out to eligible traders."
         />
         <StatCard
           emoji="👥"
@@ -250,7 +250,7 @@ export function DashboardClient(): React.JSX.Element {
           label="Unique wallets considered"
           value={numberFormat(holderCount)}
           accentColor="var(--pink)"
-          body="Wallets we spotted with CLawback exposure and trading activity during this window."
+          body="Wallets we spotted with $CLAWBACK exposure and trading activity during this window."
         />
         <StatCard
           emoji="📈"
@@ -266,7 +266,7 @@ export function DashboardClient(): React.JSX.Element {
             <div className="section-title" style={{ color: "var(--peach)", margin: 0 }}>Who Qualifies?</div>
           </div>
           <ul style={{ margin: "8px 0 0", paddingLeft: "20px", color: "var(--ink-soft)", fontSize: "0.9rem", lineHeight: 1.8 }}>
-            <li>Holds CLawback above the minimum balance</li>
+            <li>Holds $CLAWBACK above the minimum balance</li>
             <li>Has trades recorded in the epoch window</li>
             <li>Took realized losses (capped per-wallet)</li>
           </ul>
@@ -288,7 +288,7 @@ export function DashboardClient(): React.JSX.Element {
             </div>
             <div className="how-step">
               <div className="how-step-title">2. Pool fills up</div>
-              <div className="how-step-body">Creator rewards and fees trickle into the CLawback treasury every epoch.</div>
+              <div className="how-step-body">Creator rewards and fees trickle into the $CLAWBACK treasury every epoch.</div>
             </div>
             <div className="how-step">
               <div className="how-step-title">3. SOL goes out</div>
@@ -322,12 +322,12 @@ export function DashboardClient(): React.JSX.Element {
       {agentPool && (
         <section style={{ marginBottom: "24px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "18px" }}>
-            <span style={{ fontSize: "1.6rem" }}>🤖</span>
+            <span style={{ fontSize: "1.6rem" }}>🦞</span>
             <div>
               <div style={{ fontSize: "0.72rem", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--pink)" }}>
                 A2A Economy
               </div>
-              <div style={{ fontSize: "1.2rem", fontWeight: 900, color: "var(--ink)" }}>Agent Reward Pool</div>
+              <div style={{ fontSize: "1.2rem", fontWeight: 900, color: "var(--ink)" }}>$CLAWBACK Agent Pool</div>
             </div>
             <a
               href="/skills/clawback-agent-skill.json"
@@ -339,7 +339,7 @@ export function DashboardClient(): React.JSX.Element {
                 fontSize: "0.82rem", textDecoration: "none", transition: "all 0.2s",
               }}
             >
-              ⬇ Download Skill
+              🦞 Download Skill
             </a>
           </div>
 
@@ -425,7 +425,7 @@ export function DashboardClient(): React.JSX.Element {
           <div className="section-title" style={{ color: "var(--sky)", margin: 0 }}>Check a Wallet</div>
         </div>
         <p className="section-body">
-          Pick any address below to see its SOL gains or losses this epoch. Full connect-and-claim is coming when CLawback goes live.
+          Pick any address below to see its SOL gains or losses this epoch. Full connect-and-claim is coming when $CLAWBACK goes live 🦞.
         </p>
 
         <label htmlFor="addressSelect" className="card-label" style={{ display: "block", marginTop: "16px" }}>
@@ -476,7 +476,7 @@ export function DashboardClient(): React.JSX.Element {
         )}
 
         <p className="footer-note">
-          🌱 This is a read-only preview of how refunds will look. When CLawback launches mainnet, connect your wallet here to claim SOL directly.
+          🌱 This is a read-only preview of how refunds will look. When $CLAWBACK launches mainnet 🦞, connect your wallet here to claim SOL directly.
         </p>
       </section>
 

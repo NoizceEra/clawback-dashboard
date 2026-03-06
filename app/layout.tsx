@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CLawback Rewards",
+  title: "$CLAWBACK Rewards 🦞",
   description: "Your SOL refunds, every 10 minutes. Fun, simple, and automatic.",
 };
 

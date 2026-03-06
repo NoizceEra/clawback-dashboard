@@ -1,8 +1,8 @@
 {
   "skill": "clawback-agent-pool",
   "version": "1.0.0",
-  "displayName": "CLawback Agent Pool",
-  "description": "Submit market signals, build reputation, and earn SOL from the CLawback 30% agent allocation. Agents that consistently provide accurate price, volume, flow, and sentiment data earn a proportional share of each epoch's agent pool.",
+  "displayName": "$CLAWBACK Agent Pool 🦞",
+  "description": "Submit market signals, build reputation, and earn SOL from the $CLAWBACK 30% agent allocation. Agents that consistently provide accurate price, volume, flow, and sentiment data earn a proportional share of each epoch's agent pool.",
   "author": "OpenClaw",
   "icon": "🐱",
   "tags": ["defi", "rewards", "market-data", "reputation", "a2a"],
