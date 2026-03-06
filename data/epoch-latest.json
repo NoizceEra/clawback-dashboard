@@ -1,0 +1,48 @@
+{
+  "tokenSymbol": "CLAWBACK",
+  "tokenMint": "PLACEHOLDER_TOKEN_MINT_ADDRESS",
+  "treasuryAddress": "PLACEHOLDER_TREASURY_ADDRESS",
+  "generatedAt": "2026-03-06T19:00:54.885Z",
+  "epochId": 101,
+  "epochStart": "2026-03-03T00:40:00.000Z",
+  "epochEnd": "2026-03-05T07:05:00.000Z",
+  "openingBalance": 1947.95,
+  "closingBalance": 3565.87,
+  "totals": {
+    "staked": 1850,
+    "unstaked": 100,
+    "claimed": 130,
+    "fees": 2.08,
+    "netPoolChange": 1617.92
+  },
+  "activityCount": 5,
+  "addresses": [
+    {
+      "address": "ADDR_GAMMA_PLACEHOLDER_333333333333333333333333333",
+      "staked": 1200,
+      "unstaked": 0,
+      "claimed": 40,
+      "fees": 1.24,
+      "netChange": 1158.76,
+      "activityCount": 2
+    },
+    {
+      "address": "ADDR_ALPHA_PLACEHOLDER_111111111111111111111111111",
+      "staked": 650,
+      "unstaked": 0,
+      "claimed": 90,
+      "fees": 0.74,
+      "netChange": 559.26,
+      "activityCount": 2
+    },
+    {
+      "address": "ADDR_BETA_PLACEHOLDER_2222222222222222222222222222",
+      "staked": 0,
+      "unstaked": 100,
+      "claimed": 0,
+      "fees": 0.1,
+      "netChange": -100.1,
+      "activityCount": 1
+    }
+  ]
+}
