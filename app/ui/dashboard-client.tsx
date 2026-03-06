@@ -16,6 +16,42 @@ function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
+// Pastel stat card with a colored accent stripe
+function StatCard({
+  emoji,
+  title,
+  label,
+  value,
+  valueColor,
+  body,
+  accentColor,
+}: {
+  emoji: string;
+  title: string;
+  label: string;
+  value: string;
+  valueColor?: string;
+  body?: string;
+  accentColor: string;
+}) {
+  return (
+    <article
+      className="card"
+      style={{ borderTop: `4px solid ${accentColor}`, paddingTop: "20px" }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+        <span style={{ fontSize: "1.4rem" }}>{emoji}</span>
+        <div className="section-title" style={{ color: accentColor, margin: 0 }}>{title}</div>
+      </div>
+      <div className="card-label">{label}</div>
+      <div className="card-value" style={valueColor ? { color: valueColor } : {}}>
+        {value}
+      </div>
+      {body && <p className="section-body" style={{ marginTop: "10px" }}>{body}</p>}
+    </article>
+  );
+}
+
 export function DashboardClient(): React.JSX.Element {
   const [summary, setSummary] = useState<EpochSummary | null>(null);
   const [selectedAddress, setSelectedAddress] = useState<string>("");
@@ -26,70 +62,49 @@ export function DashboardClient(): React.JSX.Element {
 
   useEffect(() => {
     let active = true;
-
     async function loadSummary(): Promise<void> {
       setLoading(true);
       try {
         const response = await fetch("/api/epoch/latest");
         const payload = (await response.json()) as EpochSummary | { error?: string };
-
         if (!response.ok || !("epochId" in payload)) {
           throw new Error("error" in payload ? payload.error : "Failed to load latest reward batch");
         }
-
         if (active) {
           setSummary(payload);
           setSelectedAddress(payload.addresses[0]?.address ?? "");
           setError("");
         }
       } catch (caught) {
-        if (active) {
-          setError(caught instanceof Error ? caught.message : "Unknown error");
-        }
+        if (active) setError(caught instanceof Error ? caught.message : "Unknown error");
       } finally {
         if (active) setLoading(false);
       }
     }
-
     void loadSummary();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
     let active = true;
-
     async function loadStats(): Promise<void> {
-      if (!selectedAddress) {
-        setSelectedStats(null);
-        return;
-      }
-
+      if (!selectedAddress) { setSelectedStats(null); return; }
       setStatsLoading(true);
       try {
         const response = await fetch(`/api/epoch/address/${encodeURIComponent(selectedAddress)}`);
         const payload = (await response.json()) as AddressStats | { error?: string };
-
         if (!response.ok || !("address" in payload)) {
           throw new Error("error" in payload ? payload.error : "Failed to load address stats");
         }
-
         if (active) setSelectedStats(payload);
       } catch (caught) {
-        if (active) {
-          setSelectedStats(null);
-          setError(caught instanceof Error ? caught.message : "Unknown error");
-        }
+        if (active) { setSelectedStats(null); setError(caught instanceof Error ? caught.message : "Unknown error"); }
       } finally {
         if (active) setStatsLoading(false);
       }
     }
-
     void loadStats();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [selectedAddress]);
 
   const generatedAt = useMemo(() => {
@@ -97,25 +112,25 @@ export function DashboardClient(): React.JSX.Element {
     return new Date(summary.generatedAt).toLocaleString();
   }, [summary]);
 
-  const holderCount = useMemo(() => {
-    return summary?.addresses.length ?? 0;
-  }, [summary]);
-
-  const avgReward = useMemo(() => {
+  const holderCount   = summary?.addresses.length ?? 0;
+  const avgReward     = useMemo(() => {
     if (!summary || summary.addresses.length === 0) return 0;
-    const totalNet = summary.addresses.reduce((acc, addr) => acc + (addr.netChange ?? 0), 0);
-    return totalNet / summary.addresses.length;
+    return summary.addresses.reduce((a, x) => a + (x.netChange ?? 0), 0) / summary.addresses.length;
   }, [summary]);
 
   const treasuryAmount = summary?.closingBalance ?? 0;
-  const nextDistributionLabel = "Every 10 minutes";
 
   if (loading) {
     return (
       <main className="container">
-        <div style={{ textAlign: "center", padding: "60px 20px" }}>
-          <div style={{ fontSize: "48px", marginBottom: "20px" }}>⏳</div>
-          <p style={{ color: "var(--ink-muted)", fontSize: "1.1rem" }}>Loading CLawback Dashboard...</p>
+        <div style={{ textAlign: "center", padding: "80px 0" }}>
+          <div style={{ fontSize: "4rem", marginBottom: "16px", animation: "spin 2s linear infinite", display: "inline-block" }}>
+            🌸
+          </div>
+          <p style={{ color: "var(--ink-soft)", fontWeight: 700, fontSize: "1.1rem" }}>
+            Crunching your rewards...
+          </p>
+          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>
       </main>
     );
@@ -124,173 +139,230 @@ export function DashboardClient(): React.JSX.Element {
   if (error || !summary) {
     return (
       <main className="container">
-        <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--danger)" }}>
-          <div style={{ fontSize: "48px", marginBottom: "20px" }}>⚠️</div>
-          <p style={{ fontSize: "1.1rem" }}>Error: {error || "No reward data found."}</p>
+        <div style={{ textAlign: "center", padding: "80px 0" }}>
+          <div style={{ fontSize: "3.5rem", marginBottom: "16px" }}>😢</div>
+          <p style={{ color: "#e11d48", fontWeight: 700 }}>Oops! {error || "No reward data found."}</p>
         </div>
       </main>
     );
   }
 
+  const poolDelta = summary.closingBalance - summary.openingBalance;
+
   return (
     <main className="container">
+
+      {/* ── Header ── */}
       <header className="header">
-        <h1>CLawback Rewards Dashboard</h1>
-        <p className="tagline">Real-time insights into creator reward distributions and clawback pools updated every epoch.</p>
+        <div className="header-badge">
+          <span>✨</span> Live Rewards
+        </div>
+        <h1>CLawback Rewards</h1>
+        <p className="tagline">
+          Every 10 minutes, a slice of creator rewards flows back to traders who need it most. No staking, no drama.
+        </p>
       </header>
 
+      {/* ── Hero Row ── */}
       <section className="hero-row">
+
         <article className="hero-card">
-          <h2 className="hero-title">How CLawback Works</h2>
+          <h2 className="hero-title">What is CLawback? 🐱</h2>
           <p className="hero-subtitle">
-            A portion of creator rewards flows back to traders who experienced losses in previous trades. Every epoch, SOL payouts are distributed based on holdings and trading activity.
+            CLawback scoops a portion of creator rewards and redistributes it as SOL refunds to holders who had a rough
+            trading session. Think of it as a soft landing for bad days.
           </p>
           <div className="hero-pill-row">
-            <span className="hero-pill">New reward epoch every 10 minutes</span>
-            <span className="hero-pill">SOL payouts only</span>
-            <span className="hero-pill">No staking required</span>
+            <span className="hero-pill">⏱ New epoch every 10 min</span>
+            <span className="hero-pill">💰 Pure SOL payouts</span>
+            <span className="hero-pill">🎉 No staking needed</span>
           </div>
           <p className="hero-footnote">
-            Eligibility requires: (1) CLawback holdings and (2) recent trading activity. Larger losses and holdings increase your priority in the distribution queue.
+            To qualify: hold CLawback tokens above the minimum, have recent on-chain trades, and have taken some
+            realized losses. Bigger losses + bigger bags = higher priority.
           </p>
         </article>
 
-        <article className="hero-metrics">
+        <div className="hero-metrics">
           <div className="hero-metric-card">
             <div className="hero-metric-label">Current Epoch</div>
             <div className="hero-metric-value">#{summary.epochId}</div>
-            <div className="hero-metric-chip">Last updated {generatedAt}</div>
+            <div className="hero-metric-chip">
+              <span>🕐</span> {generatedAt}
+            </div>
           </div>
           <div className="hero-metric-card">
-            <div className="hero-metric-label">Distribution Frequency</div>
-            <div className="hero-metric-value">{nextDistributionLabel}</div>
-            <div className="hero-metric-chip">Streaming rewards in rolling windows</div>
+            <div className="hero-metric-label">Drops every</div>
+            <div className="hero-metric-value">10 min</div>
+            <div className="hero-metric-chip">
+              <span>🔄</span> Rolling windows
+            </div>
           </div>
+          <div className="hero-metric-card" style={{ borderColor: "rgba(16,185,129,0.3)", background: "var(--mint-lt)" }}>
+            <div className="hero-metric-label">Pool Balance</div>
+            <div className="hero-metric-value" style={{ color: "var(--mint)" }}>{solFormat(treasuryAmount)}</div>
+            <div className="hero-metric-chip" style={{ background: "rgba(16,185,129,0.15)", color: "var(--mint)" }}>
+              <span>💎</span> Ready to pay out
+            </div>
+          </div>
+          <div className="hero-metric-card" style={{ borderColor: "rgba(236,72,153,0.3)", background: "var(--pink-lt)" }}>
+            <div className="hero-metric-label">Active Wallets</div>
+            <div className="hero-metric-value" style={{ color: "var(--pink)" }}>{numberFormat(holderCount)}</div>
+            <div className="hero-metric-chip" style={{ background: "rgba(236,72,153,0.15)", color: "var(--pink)" }}>
+              <span>👛</span> This epoch
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      {/* ── Stat Cards ── */}
+      <section className="grid" aria-label="Reward stats">
+        <StatCard
+          emoji="🏦"
+          title="Reward Pool"
+          label="SOL ready this epoch"
+          value={solFormat(treasuryAmount)}
+          valueColor="var(--purple)"
+          accentColor="var(--purple)"
+          body="The total SOL sitting in the CLawback treasury, waiting to flow out to eligible traders."
+        />
+        <StatCard
+          emoji="👥"
+          title="Holders in Batch"
+          label="Unique wallets considered"
+          value={numberFormat(holderCount)}
+          accentColor="var(--pink)"
+          body="Wallets we spotted with CLawback exposure and trading activity during this window."
+        />
+        <StatCard
+          emoji="📈"
+          title="Avg Reward"
+          label="Per eligible address"
+          value={solFormat(avgReward)}
+          accentColor="var(--mint)"
+          body="Mean SOL refund going out per qualifying wallet in this round."
+        />
+        <article className="card" style={{ borderTop: "4px solid var(--peach)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+            <span style={{ fontSize: "1.4rem" }}>📋</span>
+            <div className="section-title" style={{ color: "var(--peach)", margin: 0 }}>Who Qualifies?</div>
+          </div>
+          <ul style={{ margin: "8px 0 0", paddingLeft: "20px", color: "var(--ink-soft)", fontSize: "0.9rem", lineHeight: 1.8 }}>
+            <li>Holds CLawback above the minimum balance</li>
+            <li>Has trades recorded in the epoch window</li>
+            <li>Took realized losses (capped per-wallet)</li>
+          </ul>
         </article>
       </section>
 
-      <section className="grid" aria-label="Reward overview stats">
-        <article className="card">
-          <div className="section-title">Reward Pool</div>
-          <div className="card-label">SOL Available This Epoch</div>
-          <div className="card-value-accent">{solFormat(treasuryAmount)}</div>
-          <p className="section-body">
-            Total SOL currently in the CLawback pool ready for distribution to eligible traders.
-          </p>
-        </article>
-
-        <article className="card">
-          <div className="section-title">Active Holders</div>
-          <div className="card-label">Addresses in This Batch</div>
-          <div className="card-value">{numberFormat(holderCount)}</div>
-          <p className="section-body">
-            Unique wallets identified with CLawback exposure and trading activity in this epoch.
-          </p>
-        </article>
-
-        <article className="card">
-          <div className="section-title">Average Reward</div>
-          <div className="card-label">Per Eligible Address</div>
-          <div className="card-value">{solFormat(avgReward)}</div>
-          <p className="section-body">
-            Average SOL refund amount per wallet in this reward distribution epoch.
-          </p>
-        </article>
-
-        <article className="card">
-          <div className="section-title">Eligibility Criteria</div>
-          <div className="section-body">
-            <ul style={{ paddingLeft: 18, margin: "8px 0" }}>
-              <li>Holds CLawback above minimum balance threshold</li>
-              <li>Recent trading activity during epoch window</li>
-              <li>Realized losses within tracking period</li>
-            </ul>
-          </div>
-        </article>
-      </section>
-
+      {/* ── How it Works + Epoch Details ── */}
       <section className="grid" aria-label="How it works and epoch details">
+
         <article className="card">
-          <div className="section-title">Distribution Flow</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+            <span style={{ fontSize: "1.4rem" }}>🗺️</span>
+            <div className="section-title" style={{ color: "var(--purple)", margin: 0 }}>How It Works</div>
+          </div>
           <div className="how-grid">
             <div className="how-step">
-              <div className="how-step-title">1. On-Chain Trading</div>
-              <div className="how-step-body">Users trade normally. Trading outcomes are monitored continuously.</div>
+              <div className="how-step-title">1. You trade normally</div>
+              <div className="how-step-body">Just do your thing on-chain. Win some, lose some. We watch quietly in the background.</div>
             </div>
             <div className="how-step">
-              <div className="how-step-title">2. Pool Accumulation</div>
-              <div className="how-step-body">Creator rewards and fees accumulate in the CLawback treasury.</div>
+              <div className="how-step-title">2. Pool fills up</div>
+              <div className="how-step-body">Creator rewards and fees trickle into the CLawback treasury every epoch.</div>
             </div>
             <div className="how-step">
-              <div className="how-step-title">3. Distribution</div>
-              <div className="how-step-body">Every 10 minutes, the accountant calculates and distributes eligible refunds.</div>
+              <div className="how-step-title">3. SOL goes out</div>
+              <div className="how-step-body">Every ~10 min the accountant runs, scores every wallet, and pays out SOL automatically.</div>
             </div>
           </div>
         </article>
 
         <article className="card">
-          <div className="section-title">Current Epoch Summary</div>
-          <p className="card-label">Pool Balance Movement</p>
-          <p className="card-value" style={{ marginTop: "8px" }}>
-            <span style={{ color: "var(--info)" }}>
-              {summary.closingBalance > summary.openingBalance ? "+" : ""}
-              {solFormat(summary.closingBalance - summary.openingBalance)}
-            </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+            <span style={{ fontSize: "1.4rem" }}>📊</span>
+            <div className="section-title" style={{ color: "var(--pink)", margin: 0 }}>Epoch #{summary.epochId} Recap</div>
+          </div>
+          <div className="card-label">Pool Movement</div>
+          <div className="card-value" style={{ color: poolDelta >= 0 ? "var(--mint)" : "#e11d48", fontSize: "1.3rem" }}>
+            {poolDelta >= 0 ? "+" : ""}{solFormat(poolDelta)}
+          </div>
+          <p style={{ fontSize: "0.82rem", color: "var(--ink-muted)", margin: "4px 0 16px" }}>
+            {solFormat(summary.openingBalance)} &rarr; {solFormat(summary.closingBalance)}
           </p>
-          <p style={{ fontSize: "0.85rem", color: "var(--ink-muted)", margin: "6px 0" }}>
-            {solFormat(summary.openingBalance)} {"->"} {solFormat(summary.closingBalance)}
-          </p>
-          <p className="card-label" style={{ marginTop: 12 }}>Total Activity Events</p>
-          <p className="section-body">{numberFormat(summary.activityCount)} recorded transactions</p>
+          <div className="card-label">Activity Events</div>
+          <div style={{ fontSize: "1.2rem", fontWeight: 800, marginTop: "4px", color: "var(--ink)" }}>
+            {numberFormat(summary.activityCount)}
+            <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--ink-muted)", marginLeft: "6px" }}>transactions</span>
+          </div>
         </article>
+
       </section>
 
-      <section className="card" aria-label="Address lookup">
-        <div className="section-title">Address Lookup</div>
+      {/* ── Wallet Lookup ── */}
+      <section className="card" aria-label="Wallet lookup">
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+          <span style={{ fontSize: "1.4rem" }}>🔍</span>
+          <div className="section-title" style={{ color: "var(--sky)", margin: 0 }}>Check a Wallet</div>
+        </div>
         <p className="section-body">
-          Select or paste a wallet address to view its SOL gains/losses in this epoch and activity metrics.
+          Pick any address below to see its SOL gains or losses this epoch. Full connect-and-claim is coming when CLawback goes live.
         </p>
 
         <label htmlFor="addressSelect" className="card-label" style={{ display: "block", marginTop: "16px" }}>
-          Select Wallet Address
+          Select Address
         </label>
         <select
           id="addressSelect"
           className="select"
           value={selectedAddress}
-          onChange={(event) => setSelectedAddress(event.target.value)}
+          onChange={(e) => setSelectedAddress(e.target.value)}
         >
           {summary.addresses.map((entry) => (
             <option key={entry.address} value={entry.address}>
-              {shortAddress(entry.address)} ({solFormat(entry.netChange ?? 0)})
+              {shortAddress(entry.address)} — {solFormat(entry.netChange ?? 0)}
             </option>
           ))}
         </select>
 
         {statsLoading && (
-          <div style={{ textAlign: "center", padding: "20px", opacity: 0.7 }}>
-            <p className="section-body">Loading address stats...</p>
+          <div style={{ padding: "24px 0", textAlign: "center", color: "var(--ink-muted)", fontWeight: 700 }}>
+            Loading... ✨
           </div>
         )}
+
         {!statsLoading && selectedStats && (
-          <div className="statsRow" style={{ marginTop: "24px" }}>
-            <div style={{ background: "rgba(0, 217, 255, 0.05)", padding: "16px", borderRadius: "12px", border: "1px solid rgba(0, 217, 255, 0.2)" }}>
-              <span className="card-label">Net SOL This Epoch</span>
-              <br />
-              <span className="card-value-accent">{solFormat(selectedStats.netChange)}</span>
+          <div className="statsRow">
+            <div style={{
+              background: "linear-gradient(135deg, var(--purple-lt), var(--pink-lt))",
+              padding: "18px", borderRadius: "18px",
+              border: "1.5px solid rgba(168,85,247,0.2)"
+            }}>
+              <div className="card-label" style={{ color: "var(--purple)" }}>Net SOL This Epoch</div>
+              <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "var(--purple)", marginTop: "4px" }}>
+                {solFormat(selectedStats.netChange)}
+              </div>
             </div>
-            <div style={{ background: "rgba(59, 130, 246, 0.05)", padding: "16px", borderRadius: "12px", border: "1px solid rgba(59, 130, 246, 0.2)" }}>
-              <span className="card-label">Trading Events</span>
-              <br />
-              <span className="card-value">{numberFormat(selectedStats.activityCount)}</span>
+            <div style={{
+              background: "linear-gradient(135deg, var(--sky-lt), var(--mint-lt))",
+              padding: "18px", borderRadius: "18px",
+              border: "1.5px solid rgba(56,189,248,0.2)"
+            }}>
+              <div className="card-label" style={{ color: "var(--sky)" }}>Trading Events</div>
+              <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "var(--sky)", marginTop: "4px" }}>
+                {numberFormat(selectedStats.activityCount)}
+              </div>
             </div>
           </div>
         )}
 
         <p className="footer-note">
-          This dashboard displays a read-only view of reward calculations. When CLawback launches mainnet, users will be able to connect wallets and claim refunds directly from this interface.
+          🌱 This is a read-only preview of how refunds will look. When CLawback launches mainnet, connect your wallet here to claim SOL directly.
         </p>
       </section>
+
     </main>
   );
 }
