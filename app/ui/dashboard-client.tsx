@@ -177,7 +177,7 @@ export function DashboardClient(): React.JSX.Element {
         </div>
         <h1>$CLAWBACK Rewards</h1>
         <p className="tagline">
-          Every 10 minutes, a slice of creator rewards flows back to traders who need it most. No staking, no drama.
+          Every trade sends a small slice into the $CLAWBACK pool – one pot that rewards both the people using the ecosystem and the people building it.
         </p>
       </header>
 
@@ -187,8 +187,13 @@ export function DashboardClient(): React.JSX.Element {
         <article className="hero-card">
           <h2 className="hero-title">What is $CLAWBACK? 🦞</h2>
           <p className="hero-subtitle">
-            $CLAWBACK scoops a portion of creator rewards and redistributes it as SOL refunds to holders who had a rough
-            trading session. Think of it as a soft landing for bad days.
+            Every trade sends a small slice into the $CLAWBACK pool.
+          </p>
+          <p className="hero-subtitle">
+            That pool does two things: cashback for users (active traders and holders get a share back over time), and rewards for creators (launch good coins or build useful tools, and you earn from the same pool).
+          </p>
+          <p className="hero-subtitle">
+            One pot of money, rewarding both the people using the ecosystem and the people building it.
           </p>
           <div className="hero-pill-row">
             <span className="hero-pill">⏱ New epoch every 10 min</span>

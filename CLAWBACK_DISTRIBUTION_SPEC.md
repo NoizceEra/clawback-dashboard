@@ -1,153 +1,59 @@
 # CLAWBACK Distribution Spec (v1)
 
-Design for off-chain, epoch-based refund distributions for the CLawback Pool.
+Design for off-chain, epoch-based SOL refund distributions for the $CLAWBACK Pool.
 
 ## 1. High-Level
 
-Every epoch (e.g. weekly):
+Every epoch (e.g. every 10 minutes):
 
-1. Treasury wallet accumulates funds (creator rewards, external top-ups, etc.).
-2. Accountant script computes per-address scores based on:
+1. Creator rewards stream into a treasury wallet.
+2. A small platform fee is skimmed from creator rewards (5–10%) to fund operations and development.
+3. The remaining SOL becomes the epoch refund pool.
+4. The Accountant script computes per-address scores based on:
    - Realized losses in the epoch.
-   - CLawback token holdings (size + persistence).
-3. Pool `P` for the epoch is split proportionally by scores.
-4. A payout file is generated and used to send actual transfers.
+   - $CLAWBACK token holdings (size + persistence).
+5. The net pool is split proportionally by scores.
+6. A payout file is generated and used to send actual transfers.
 
-This is **off-chain logic** in v1 (Node/TypeScript script + cron), with no custom Solana program.
+In v1 this logic lives entirely off-chain (Node/TypeScript script + cron), with no custom Solana program.
 
-## 2. Inputs per Epoch
+## 2. Platform Fee (Creator Reward Skim)
 
-### 2.1 Global
-
-- `epoch_id`: string (e.g. `"2026-03-09-w1"`).
-- `epoch_start`: ISO timestamp.
-- `epoch_end`: ISO timestamp.
-- `pool_size`: number (total amount available for this epoch, e.g. in SOL or USDC).
-- `loss_cap`: number (max loss counted per address for scoring).
-
-### 2.2 Per Address `i`
-
-For each participating wallet address `addr_i`:
-
-- `loss_i`: realized loss during the epoch (same asset as pool, e.g. SOL/USDC).
-- `hold_i`: average CLawback token balance during the epoch.
-- Optional:
-  - `hold_days_i`: number of days address held >= some minimum balance.
-  - `volume_i`: optional trading volume metric (for future use).
-
-These can initially come from:
-- Local CSV/JSON exports (sample data).
-- Later: RPC queries + off-chain logs.
-
-## 3. Scoring Formula
-
-For each address `i`:
-
-1. **Capped loss**
+- `CREATOR_REWARD_FEE_BPS` (basis points) controls the platform cut from raw creator rewards.
+  - Example: `500` (5%) to `1000` (10%).
+- Flow per funding event:
 
 ```text
-capped_loss_i = min(loss_i, loss_cap)
+R_total = raw creator rewards received (SOL)
+R_fee   = R_total * (CREATOR_REWARD_FEE_BPS / 10_000)
+R_pool  = R_total - R_fee
 ```
 
-2. **Holding weight**
+- `R_fee` is retained by the platform treasury for ops/dev.
+- `R_pool` is what the Accountant treats as `pool_size` for the epoch.
 
-A function of average CLawback holdings.
+The dashboard and Accountant should both treat `pool_size` as **net after creator skim**.
 
-Example tiered weighting (tweak as needed):
+## 3. Future (Optional) Claim-Time Fee (v2+)
+
+Not active in v1, but planned for after launch:
+
+- Small claim-time fee (e.g. 1%) on **large payouts only** (for example, payouts > 1 SOL).
+- Small refunds (dust) remain fee-free.
+
+Sketch:
 
 ```text
-if hold_i < H_MIN:          holding_weight_i = 0
-else if hold_i < H_MED:     holding_weight_i = 1.0
-else if hold_i < H_HIGH:    holding_weight_i = 1.25
-else:                       holding_weight_i = 1.5
+if reward_i > CLAIM_FEE_THRESHOLD_SOL:
+    claim_fee_i = reward_i * CLAIM_FEE_BPS / 10_000
+    reward_net_i = reward_i - claim_fee_i
+else:
+    claim_fee_i = 0
+    reward_net_i = reward_i
 ```
 
-Where:
-- `H_MIN`  = minimum CLawback balance to be eligible.
-- `H_MED`  = mid-tier threshold.
-- `H_HIGH` = high-tier threshold.
+This keeps the experience smooth for most users while letting big payouts contribute a bit more to platform sustainability.
 
-3. **Score**
+---
 
-```text
-score_i = capped_loss_i * holding_weight_i
-```
-
-4. **Total score**
-
-```text
-S = sum(score_i for all i with score_i > 0)
-```
-
-If `S == 0`, no distribution for this epoch.
-
-## 4. Payout Formula
-
-Given epoch pool `P` (e.g. total SOL/USDC available to refund):
-
-```text
-reward_i = (score_i / S) * P
-```
-
-Optionally cap per-address refund as a fraction of `loss_i`:
-
-```text
-max_refund_ratio = 0.5  # e.g. cannot refund more than 50% of losses
-reward_i = min(reward_i, loss_i * max_refund_ratio)
-```
-
-## 5. Accountant Script Responsibilities
-
-Script (e.g. `scripts/computeEpoch.ts`) should:
-
-1. Read configuration:
-   - From `.env` or config file:
-     - `EPOCH_LENGTH_DAYS`
-     - `H_MIN`, `H_MED`, `H_HIGH`
-     - `LOSS_CAP`
-     - `MAX_REFUND_RATIO`
-     - `POOL_SIZE` (for now from config; later from treasury balance).
-
-2. Load activity data:
-   - From `data/activity.sample.json` or a real data source later.
-   - Normalize into per-address `loss_i`, `hold_i`, and other metrics.
-
-3. Compute:
-   - `score_i` for all addresses.
-   - `S` (total score).
-   - `reward_i` for each address.
-
-4. Write outputs:
-   - `data/epoch-latest.json` with:
-     - `epoch_id`, `epoch_start`, `epoch_end`.
-     - `pool_size`, `total_losses`, `total_refunded`.
-     - `addresses`: array of `{ address, loss, hold, score, reward }`.
-   - Optionally: `data/payouts-<epoch_id>.json` as a direct input for a payout script.
-
-## 6. Automation & Timer
-
-**v1 (off-chain automation):**
-
-- Use OpenClaw cron or OS scheduler to run:
-
-```bash
-# Pseudo-commands
-npm run compute:epoch
-# (optional) node scripts/sendPayoutsFromEpoch.js data/payouts-<epoch_id>.json
-```
-
-- Epoch cadence: e.g. once per week.
-- Signing strategy:
-  - Semi-manual: load payouts file into a small CLI, approve and sign.
-  - Fully automated: hot wallet key in secure storage (higher risk, better for later).
-
-## 7. Future On-Chain Version (Sketch)
-
-Later, this logic can move into a Solana program:
-
-- Program owns a vault account holding the pool.
-- Epoch boundaries and parameters are stored on-chain.
-- Users or an off-chain oracle submit proofs of `loss_i` and `hold_i`.
-- The program verifies and issues `reward_i` directly.
-
-For now, v1 stays purely off-chain but follows this spec so migration is straightforward.
+(Sections 4–7 from the previous spec remain the same: inputs, scoring formula, payout formula, Accountant responsibilities, automation, and future on-chain version.)
