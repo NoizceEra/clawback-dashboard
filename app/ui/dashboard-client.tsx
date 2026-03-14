@@ -1,8 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { AddressStats, EpochSummary } from "../../types/epoch";
 import type { AgentPoolSummary } from "../../types/agent";
+import type {
+  DistributionConfig,
+  DistributionSummary
+} from "../../types/distribution";
+import type { AddressStats, EpochSummary } from "../../types/epoch";
 import { IntelMarketplace } from "./intel-marketplace";
 
 function numberFormat(value: number): string {
@@ -18,9 +22,11 @@ function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-// Pastel stat card with a colored accent stripe
+function percentageFormat(value: number): string {
+  return `${numberFormat(value)}%`;
+}
+
 function StatCard({
-  emoji,
   title,
   label,
   value,
@@ -28,7 +34,6 @@ function StatCard({
   body,
   accentColor,
 }: {
-  emoji: string;
   title: string;
   label: string;
   value: string;
@@ -41,64 +46,129 @@ function StatCard({
       className="card"
       style={{ borderTop: `4px solid ${accentColor}`, paddingTop: "20px" }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-        <span style={{ fontSize: "1.4rem" }}>{emoji}</span>
-        <div className="section-title" style={{ color: accentColor, margin: 0 }}>{title}</div>
+      <div className="section-title" style={{ color: accentColor, margin: 0 }}>
+        {title}
       </div>
       <div className="card-label">{label}</div>
       <div className="card-value" style={valueColor ? { color: valueColor } : {}}>
         {value}
       </div>
-      {body && <p className="section-body" style={{ marginTop: "10px" }}>{body}</p>}
+      {body && (
+        <p className="section-body" style={{ marginTop: "10px" }}>
+          {body}
+        </p>
+      )}
     </article>
+  );
+}
+
+function ConfigField({
+  label,
+  value,
+  step = 0.01,
+  min = 0,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  step?: number;
+  min?: number;
+  onChange: (next: number) => void;
+}) {
+  return (
+    <label style={{ display: "block" }}>
+      <span className="card-label" style={{ display: "block", marginBottom: "6px" }}>
+        {label}
+      </span>
+      <input
+        className="admin-input"
+        type="number"
+        min={min}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+    </label>
   );
 }
 
 export function DashboardClient(): React.JSX.Element {
   const [summary, setSummary] = useState<EpochSummary | null>(null);
+  const [distribution, setDistribution] = useState<DistributionSummary | null>(null);
+  const [configDraft, setConfigDraft] = useState<DistributionConfig | null>(null);
   const [selectedAddress, setSelectedAddress] = useState<string>("");
   const [selectedStats, setSelectedStats] = useState<AddressStats | null>(null);
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string>("");
   const [agentPool, setAgentPool] = useState<AgentPoolSummary | null>(null);
 
   useEffect(() => {
     let active = true;
-    async function loadSummary(): Promise<void> {
+
+    async function loadDashboard(): Promise<void> {
       setLoading(true);
       try {
-        const response = await fetch("/api/epoch/latest");
-        const payload = (await response.json()) as EpochSummary | { error?: string };
-        if (!response.ok || !("epochId" in payload)) {
-          throw new Error("error" in payload ? payload.error : "Failed to load latest reward batch");
-        }
-        if (active) {
-          setSummary(payload);
-          setSelectedAddress(payload.addresses[0]?.address ?? "");
-          setError("");
+        const [epochResponse, distributionResponse, agentResponse] = await Promise.all([
+          fetch("/api/epoch/latest"),
+          fetch("/api/distribution"),
+          fetch("/api/agent/pool"),
+        ]);
+
+        const epochPayload = (await epochResponse.json()) as EpochSummary | { error?: string };
+        const distributionPayload = (await distributionResponse.json()) as
+          | DistributionSummary
+          | { error?: string };
+        const agentPayload = (await agentResponse.json()) as AgentPoolSummary | { error?: string };
+
+        if (!epochResponse.ok || !("epochId" in epochPayload)) {
+          throw new Error("error" in epochPayload ? epochPayload.error : "Failed to load epoch");
         }
 
-        // Load agent pool in parallel
-        const agentRes = await fetch("/api/agent/pool");
-        if (agentRes.ok) {
-          const agentPayload = (await agentRes.json()) as AgentPoolSummary;
-          if (active) setAgentPool(agentPayload);
+        if (!distributionResponse.ok || !("pools" in distributionPayload)) {
+          throw new Error(
+            "error" in distributionPayload
+              ? distributionPayload.error
+              : "Failed to load distribution"
+          );
+        }
+
+        if (active) {
+          setSummary(epochPayload);
+          setDistribution(distributionPayload);
+          setConfigDraft(distributionPayload.config);
+          setSelectedAddress(epochPayload.addresses[0]?.address ?? "");
+          setError("");
+          if (agentResponse.ok && "epochId" in agentPayload) {
+            setAgentPool(agentPayload);
+          }
         }
       } catch (caught) {
-        if (active) setError(caught instanceof Error ? caught.message : "Unknown error");
+        if (active) {
+          setError(caught instanceof Error ? caught.message : "Unknown error");
+        }
       } finally {
         if (active) setLoading(false);
       }
     }
-    void loadSummary();
-    return () => { active = false; };
+
+    void loadDashboard();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
     let active = true;
+
     async function loadStats(): Promise<void> {
-      if (!selectedAddress) { setSelectedStats(null); return; }
+      if (!selectedAddress) {
+        setSelectedStats(null);
+        return;
+      }
+
       setStatsLoading(true);
       try {
         const response = await fetch(`/api/epoch/address/${encodeURIComponent(selectedAddress)}`);
@@ -108,13 +178,19 @@ export function DashboardClient(): React.JSX.Element {
         }
         if (active) setSelectedStats(payload);
       } catch (caught) {
-        if (active) { setSelectedStats(null); setError(caught instanceof Error ? caught.message : "Unknown error"); }
+        if (active) {
+          setSelectedStats(null);
+          setError(caught instanceof Error ? caught.message : "Unknown error");
+        }
       } finally {
         if (active) setStatsLoading(false);
       }
     }
+
     void loadStats();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [selectedAddress]);
 
   const generatedAt = useMemo(() => {
@@ -122,87 +198,210 @@ export function DashboardClient(): React.JSX.Element {
     return new Date(summary.generatedAt).toLocaleString();
   }, [summary]);
 
-  const holderCount   = summary?.addresses.length ?? 0;
-  const avgReward     = useMemo(() => {
-    if (!summary || summary.addresses.length === 0) return 0;
-    return summary.addresses.reduce((a, x) => a + (x.netChange ?? 0), 0) / summary.addresses.length;
-  }, [summary]);
+  const holderCount = summary?.addresses.length ?? 0;
+  const avgReward = useMemo(() => {
+    if (!distribution || distribution.addresses.length === 0) return 0;
+    return (
+      distribution.addresses.reduce((total, address) => total + address.totalAllocationSol, 0) /
+      distribution.addresses.length
+    );
+  }, [distribution]);
 
-  const treasuryAmount = summary?.closingBalance ?? 0;
+  const treasuryAmount = distribution?.pools.totalPoolSol ?? summary?.closingBalance ?? 0;
+  const selectedDistribution = useMemo(() => {
+    return distribution?.addresses.find((entry) => entry.address === selectedAddress) ?? null;
+  }, [distribution, selectedAddress]);
 
-  const TIER_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-    diamond:  { bg: "#ede9fe", color: "#7c3aed", label: "💎 Diamond" },
-    gold:     { bg: "#fef9c3", color: "#92400e", label: "🥇 Gold" },
-    silver:   { bg: "#f1f5f9", color: "#475569", label: "🥈 Silver" },
-    bronze:   { bg: "#ffedd5", color: "#9a3412", label: "🥉 Bronze" },
-    newcomer: { bg: "#f0fdf4", color: "#166534", label: "🌱 Newcomer" },
-  };
+  function updateAllocation(
+    key: keyof DistributionConfig["allocation"],
+    value: number
+  ): void {
+    setConfigDraft((current) =>
+      current
+        ? {
+            ...current,
+            allocation: {
+              ...current.allocation,
+              [key]: value,
+            },
+          }
+        : current
+    );
+  }
+
+  function updateHolderWeight(
+    key: keyof DistributionConfig["holderWeights"],
+    value: number
+  ): void {
+    setConfigDraft((current) =>
+      current
+        ? {
+            ...current,
+            holderWeights: {
+              ...current.holderWeights,
+              [key]: value,
+            },
+          }
+        : current
+    );
+  }
+
+  function updateTraderWeight(
+    key: keyof DistributionConfig["traderWeights"],
+    value: number
+  ): void {
+    setConfigDraft((current) =>
+      current
+        ? {
+            ...current,
+            traderWeights: {
+              ...current.traderWeights,
+              [key]: value,
+            },
+          }
+        : current
+    );
+  }
+
+  function updateAgentWeight(
+    key: keyof DistributionConfig["agentWeights"],
+    value: number
+  ): void {
+    setConfigDraft((current) =>
+      current
+        ? {
+            ...current,
+            agentWeights: {
+              ...current.agentWeights,
+              [key]: value,
+            },
+          }
+        : current
+    );
+  }
+
+  function updateEligibility(
+    key: keyof DistributionConfig["eligibility"],
+    value: number
+  ): void {
+    setConfigDraft((current) =>
+      current
+        ? {
+            ...current,
+            eligibility: {
+              ...current.eligibility,
+              [key]: value,
+            },
+          }
+        : current
+    );
+  }
+
+  async function saveDistributionConfig(): Promise<void> {
+    if (!configDraft) return;
+
+    setSavingConfig(true);
+    setSaveMessage("");
+    try {
+      const response = await fetch("/api/distribution", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...configDraft,
+          updatedBy: "dashboard-admin",
+        }),
+      });
+
+      const payload = (await response.json()) as
+        | DistributionSummary
+        | { error?: string; details?: string };
+
+      if (!response.ok || !("pools" in payload)) {
+        throw new Error(
+          "details" in payload && payload.details
+            ? payload.details
+            : "error" in payload && payload.error
+              ? payload.error
+              : "Failed to save config"
+        );
+      }
+
+      setDistribution(payload);
+      setConfigDraft(payload.config);
+      setSaveMessage(`Saved ${new Date(payload.config.updatedAt).toLocaleTimeString()}.`);
+
+      const refreshedAgentPool = await fetch("/api/agent/pool");
+      if (refreshedAgentPool.ok) {
+        const agentPayload = (await refreshedAgentPool.json()) as AgentPoolSummary;
+        setAgentPool(agentPayload);
+      }
+    } catch (caught) {
+      setSaveMessage(caught instanceof Error ? caught.message : "Failed to save config.");
+    } finally {
+      setSavingConfig(false);
+    }
+  }
 
   if (loading) {
     return (
       <main className="container">
         <div style={{ textAlign: "center", padding: "80px 0" }}>
-          <div style={{ fontSize: "4rem", marginBottom: "16px", animation: "spin 2s linear infinite", display: "inline-block" }}>
-            🌸
-          </div>
           <p style={{ color: "var(--ink-soft)", fontWeight: 700, fontSize: "1.1rem" }}>
-            Crunching your rewards...
+            Computing distribution preview...
           </p>
-          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>
       </main>
     );
   }
 
-  if (error || !summary) {
+  if (error || !summary || !distribution || !configDraft) {
     return (
       <main className="container">
         <div style={{ textAlign: "center", padding: "80px 0" }}>
-          <div style={{ fontSize: "3.5rem", marginBottom: "16px" }}>😢</div>
-          <p style={{ color: "#e11d48", fontWeight: 700 }}>Oops! {error || "No reward data found."}</p>
+          <p style={{ color: "#e11d48", fontWeight: 700 }}>
+            {error || "No distribution data found."}
+          </p>
         </div>
       </main>
     );
   }
 
   const poolDelta = summary.closingBalance - summary.openingBalance;
+  const allocationTotal =
+    configDraft.allocation.holdersPct +
+    configDraft.allocation.tradersPct +
+    configDraft.allocation.agentsPct;
 
   return (
     <main className="container">
-
-      {/* ── Header ── */}
       <header className="header">
-        <div className="header-badge">
-          <span>🦞</span> Live Rewards
-        </div>
+        <div className="header-badge">Live Rewards</div>
         <h1>$CLAWBACK Rewards</h1>
         <p className="tagline">
-          Every trade sends a small slice into the $CLAWBACK pool – one pot that rewards both the people using the ecosystem and the people building it.
+          The treasury rolls each epoch into an automatic distribution across holders, traders,
+          and agents with parameters the operations team can tune from this dashboard.
         </p>
       </header>
 
-      {/* ── Hero Row ── */}
       <section className="hero-row">
-
         <article className="hero-card">
-          <h2 className="hero-title">What is $CLAWBACK? 🦞</h2>
+          <h2 className="hero-title">Auto-allocation engine</h2>
           <p className="hero-subtitle">
-            Every trade sends a small slice into the $CLAWBACK pool.
-          </p>
-          <p className="hero-subtitle">
-            That pool does two things: cashback for users (active traders and holders get a share back over time), and rewards for creators (launch good coins or build useful tools, and you earn from the same pool).
-          </p>
-          <p className="hero-subtitle">
-            One pot of money, rewarding both the people using the ecosystem and the people building it.
+            Each epoch uses the latest treasury snapshot, classifies eligible wallets, scores
+            losses, balance, volume, and participation, then routes the pool across holders,
+            traders, and agents.
           </p>
           <div className="hero-pill-row">
-            <span className="hero-pill">⏱ New epoch every 10 min</span>
-            <span className="hero-pill">💰 Pure SOL payouts</span>
-            <span className="hero-pill">🎉 No staking needed</span>
+            <span className="hero-pill">Epoch #{summary.epochId}</span>
+            <span className="hero-pill">{percentageFormat(configDraft.allocation.holdersPct)} holders</span>
+            <span className="hero-pill">{percentageFormat(configDraft.allocation.tradersPct)} traders</span>
+            <span className="hero-pill">{percentageFormat(configDraft.allocation.agentsPct)} agents</span>
           </div>
           <p className="hero-footnote">
-            To qualify: hold $CLAWBACK tokens above the minimum, have recent on-chain trades, and have taken some
-            realized losses. Bigger losses + bigger bags = higher priority.
+            If one bucket has no eligible recipients, its share is rebalanced across the active
+            categories so the full pool still gets allocated.
           </p>
         </article>
 
@@ -210,236 +409,472 @@ export function DashboardClient(): React.JSX.Element {
           <div className="hero-metric-card">
             <div className="hero-metric-label">Current Epoch</div>
             <div className="hero-metric-value">#{summary.epochId}</div>
-            <div className="hero-metric-chip">
-              <span>🕐</span> {generatedAt}
-            </div>
+            <div className="hero-metric-chip">{generatedAt}</div>
           </div>
           <div className="hero-metric-card">
-            <div className="hero-metric-label">Drops every</div>
-            <div className="hero-metric-value">10 min</div>
+            <div className="hero-metric-label">Total Pool</div>
+            <div className="hero-metric-value">{solFormat(treasuryAmount)}</div>
             <div className="hero-metric-chip">
-              <span>🔄</span> Rolling windows
+              {distribution.pools.activeCategories.length > 0
+                ? distribution.pools.activeCategories.join(" / ")
+                : "no active categories"}
             </div>
           </div>
-          <div className="hero-metric-card" style={{ borderColor: "rgba(16,185,129,0.3)", background: "var(--mint-lt)" }}>
-            <div className="hero-metric-label">Pool Balance</div>
-            <div className="hero-metric-value" style={{ color: "var(--mint)" }}>{solFormat(treasuryAmount)}</div>
-            <div className="hero-metric-chip" style={{ background: "rgba(16,185,129,0.15)", color: "var(--mint)" }}>
-              <span>💎</span> Ready to pay out
+          <div
+            className="hero-metric-card"
+            style={{ borderColor: "rgba(16,185,129,0.3)", background: "var(--mint-lt)" }}
+          >
+            <div className="hero-metric-label">Addresses Scored</div>
+            <div className="hero-metric-value" style={{ color: "var(--mint)" }}>
+              {numberFormat(holderCount)}
+            </div>
+            <div
+              className="hero-metric-chip"
+              style={{ background: "rgba(16,185,129,0.15)", color: "var(--mint)" }}
+            >
+              {numberFormat(summary.activityCount)} events
             </div>
           </div>
-          <div className="hero-metric-card" style={{ borderColor: "rgba(236,72,153,0.3)", background: "var(--pink-lt)" }}>
-            <div className="hero-metric-label">Active Wallets</div>
-            <div className="hero-metric-value" style={{ color: "var(--pink)" }}>{numberFormat(holderCount)}</div>
-            <div className="hero-metric-chip" style={{ background: "rgba(236,72,153,0.15)", color: "var(--pink)" }}>
-              <span>👛</span> This epoch
+          <div
+            className="hero-metric-card"
+            style={{ borderColor: "rgba(236,72,153,0.3)", background: "var(--pink-lt)" }}
+          >
+            <div className="hero-metric-label">Average Address Payout</div>
+            <div className="hero-metric-value" style={{ color: "var(--pink)" }}>
+              {solFormat(avgReward)}
+            </div>
+            <div
+              className="hero-metric-chip"
+              style={{ background: "rgba(236,72,153,0.15)", color: "var(--pink)" }}
+            >
+              live preview
             </div>
           </div>
         </div>
-
       </section>
 
-      {/* ── Stat Cards ── */}
-      <section className="grid" aria-label="Reward stats">
+      <section className="grid" aria-label="Distribution stats">
         <StatCard
-          emoji="🏦"
-          title="Reward Pool"
-          label="SOL ready this epoch"
-          value={solFormat(treasuryAmount)}
+          title="Configured Split"
+          label="Holder / Trader / Agent"
+          value={`${configDraft.allocation.holdersPct} / ${configDraft.allocation.tradersPct} / ${configDraft.allocation.agentsPct}`}
           valueColor="var(--purple)"
           accentColor="var(--purple)"
-          body="The total SOL sitting in the $CLAWBACK treasury, waiting to flow out to eligible traders."
+          body="Percentages are validated to 100% before the new settings are saved."
         />
         <StatCard
-          emoji="👥"
-          title="Holders in Batch"
-          label="Unique wallets considered"
-          value={numberFormat(holderCount)}
+          title="Effective Split"
+          label="Current active categories"
+          value={`${solFormat(distribution.pools.effective.holders)} / ${solFormat(distribution.pools.effective.traders)} / ${solFormat(distribution.pools.effective.agents)}`}
           accentColor="var(--pink)"
-          body="Wallets we spotted with $CLAWBACK exposure and trading activity during this window."
+          body="Inactive categories are temporarily rebalanced into the remaining buckets."
         />
         <StatCard
-          emoji="📈"
-          title="Avg Reward"
-          label="Per eligible address"
-          value={solFormat(avgReward)}
+          title="Pool Delta"
+          label="Treasury movement this epoch"
+          value={`${poolDelta >= 0 ? "+" : ""}${solFormat(poolDelta)}`}
+          valueColor={poolDelta >= 0 ? "var(--mint)" : "#e11d48"}
           accentColor="var(--mint)"
-          body="Mean SOL refund going out per qualifying wallet in this round."
+          body={`${solFormat(summary.openingBalance)} to ${solFormat(summary.closingBalance)}`}
         />
-        <article className="card" style={{ borderTop: "4px solid var(--peach)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-            <span style={{ fontSize: "1.4rem" }}>📋</span>
-            <div className="section-title" style={{ color: "var(--peach)", margin: 0 }}>Who Qualifies?</div>
-          </div>
-          <ul style={{ margin: "8px 0 0", paddingLeft: "20px", color: "var(--ink-soft)", fontSize: "0.9rem", lineHeight: 1.8 }}>
-            <li>Holds $CLAWBACK above the minimum balance</li>
-            <li>Has trades recorded in the epoch window</li>
-            <li>Took realized losses (capped per-wallet)</li>
-          </ul>
-        </article>
+        <StatCard
+          title="Signal Window"
+          label="Agent scoring epoch"
+          value={
+            distribution.signalEpochUsed === null
+              ? "No signals"
+              : `Epoch ${distribution.signalEpochUsed}`
+          }
+          accentColor="var(--peach)"
+          body="If signal epochs do not match the treasury epoch, the latest available signal window is used."
+        />
       </section>
 
-      {/* ── How it Works + Epoch Details ── */}
       <section className="grid" aria-label="How it works and epoch details">
-
         <article className="card">
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-            <span style={{ fontSize: "1.4rem" }}>🗺️</span>
-            <div className="section-title" style={{ color: "var(--purple)", margin: 0 }}>How It Works</div>
+          <div className="section-title" style={{ color: "var(--purple)", margin: 0 }}>
+            Scoring Rules
           </div>
           <div className="how-grid">
             <div className="how-step">
-              <div className="how-step-title">1. You trade normally</div>
-              <div className="how-step-body">Just do your thing on-chain. Win some, lose some. We watch quietly in the background.</div>
+              <div className="how-step-title">Holders</div>
+              <div className="how-step-body">
+                Score = balance * {configDraft.holderWeights.balance} + participation *{" "}
+                {configDraft.holderWeights.participation}
+              </div>
             </div>
             <div className="how-step">
-              <div className="how-step-title">2. Pool fills up</div>
-              <div className="how-step-body">Creator rewards and fees trickle into the $CLAWBACK treasury every epoch.</div>
+              <div className="how-step-title">Traders</div>
+              <div className="how-step-body">
+                Score = losses * {configDraft.traderWeights.losses} + volume *{" "}
+                {configDraft.traderWeights.volume} + participation *{" "}
+                {configDraft.traderWeights.participation}
+              </div>
             </div>
             <div className="how-step">
-              <div className="how-step-title">3. SOL goes out</div>
-              <div className="how-step-body">Every ~10 min the accountant runs, scores every wallet, and pays out SOL automatically.</div>
+              <div className="how-step-title">Agents</div>
+              <div className="how-step-body">
+                Score = reputation * {configDraft.agentWeights.reputation} + accuracy *{" "}
+                {configDraft.agentWeights.accuracy} + signals *{" "}
+                {configDraft.agentWeights.signals}
+              </div>
             </div>
           </div>
         </article>
 
         <article className="card">
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
-            <span style={{ fontSize: "1.4rem" }}>📊</span>
-            <div className="section-title" style={{ color: "var(--pink)", margin: 0 }}>Epoch #{summary.epochId} Recap</div>
+          <div className="section-title" style={{ color: "var(--pink)", margin: 0 }}>
+            Eligibility
           </div>
-          <div className="card-label">Pool Movement</div>
-          <div className="card-value" style={{ color: poolDelta >= 0 ? "var(--mint)" : "#e11d48", fontSize: "1.3rem" }}>
-            {poolDelta >= 0 ? "+" : ""}{solFormat(poolDelta)}
-          </div>
-          <p style={{ fontSize: "0.82rem", color: "var(--ink-muted)", margin: "4px 0 16px" }}>
-            {solFormat(summary.openingBalance)} &rarr; {solFormat(summary.closingBalance)}
-          </p>
-          <div className="card-label">Activity Events</div>
-          <div style={{ fontSize: "1.2rem", fontWeight: 800, marginTop: "4px", color: "var(--ink)" }}>
-            {numberFormat(summary.activityCount)}
-            <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--ink-muted)", marginLeft: "6px" }}>transactions</span>
+          <div className="section-body" style={{ marginTop: "12px" }}>
+            Holders need at least {numberFormat(configDraft.eligibility.holderMinBalance)} net
+            balance and {numberFormat(configDraft.eligibility.minActivityCount)} activity events.
+            Traders need at least {numberFormat(configDraft.eligibility.traderMinLosses)} loss
+            proxy and the same activity minimum. Agents need{" "}
+            {numberFormat(configDraft.eligibility.agentMinSignals)} signals within the chosen
+            signal window.
           </div>
         </article>
-
       </section>
 
-      {/* ── Agent Economy ── */}
       {agentPool && (
         <section style={{ marginBottom: "24px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "18px" }}>
-            <span style={{ fontSize: "1.6rem" }}>🦞</span>
             <div>
-              <div style={{ fontSize: "0.72rem", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--pink)" }}>
+              <div
+                style={{
+                  fontSize: "0.72rem",
+                  fontWeight: 900,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  color: "var(--pink)",
+                }}
+              >
                 A2A Economy
               </div>
-              <div style={{ fontSize: "1.2rem", fontWeight: 900, color: "var(--ink)" }}>$CLAWBACK Agent Pool</div>
+              <div style={{ fontSize: "1.2rem", fontWeight: 900, color: "var(--ink)" }}>
+                Agent Pool Preview
+              </div>
             </div>
             <a
               href="/skills/clawback-agent-skill.json"
               download
               style={{
-                marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "6px",
-                padding: "8px 16px", borderRadius: "999px", border: "1.5px solid var(--purple)",
-                color: "var(--purple)", background: "var(--purple-lt)", fontWeight: 800,
-                fontSize: "0.82rem", textDecoration: "none", transition: "all 0.2s",
+                marginLeft: "auto",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "8px 16px",
+                borderRadius: "999px",
+                border: "1.5px solid var(--purple)",
+                color: "var(--purple)",
+                background: "var(--purple-lt)",
+                fontWeight: 800,
+                fontSize: "0.82rem",
+                textDecoration: "none",
+                transition: "all 0.2s",
               }}
             >
-              🦞 Download Skill
+              Download Skill
             </a>
           </div>
 
-          {/* Split bar */}
           <div className="card" style={{ marginBottom: "18px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
-              <span style={{ fontWeight: 800, fontSize: "0.9rem", color: "var(--ink-soft)" }}>Pool split this epoch</span>
+              <span style={{ fontWeight: 800, fontSize: "0.9rem", color: "var(--ink-soft)" }}>
+                Pool split this epoch
+              </span>
               <span style={{ fontWeight: 700, fontSize: "0.85rem", color: "var(--ink-muted)" }}>
                 {solFormat(agentPool.totalPoolSol)} total
               </span>
             </div>
-            <div style={{ display: "flex", borderRadius: "99px", overflow: "hidden", height: "14px", marginBottom: "14px" }}>
-              <div style={{ flex: 70, background: "linear-gradient(90deg, var(--purple), var(--pink))" }} title="70% holders & traders" />
-              <div style={{ flex: 30, background: "linear-gradient(90deg, var(--mint), var(--sky))" }} title="30% agents" />
+            <div
+              style={{
+                display: "flex",
+                borderRadius: "99px",
+                overflow: "hidden",
+                height: "14px",
+                marginBottom: "14px",
+              }}
+            >
+              <div
+                style={{
+                  flex: agentPool.holderTraderAllocationSol,
+                  background: "linear-gradient(90deg, var(--purple), var(--pink))",
+                }}
+                title="holders and traders"
+              />
+              <div
+                style={{
+                  flex: agentPool.agentAllocationSol,
+                  background: "linear-gradient(90deg, var(--mint), var(--sky))",
+                }}
+                title="agents"
+              />
             </div>
-            <div style={{ display: "flex", gap: "24px", fontSize: "0.85rem" }}>
+            <div style={{ display: "flex", gap: "24px", fontSize: "0.85rem", flexWrap: "wrap" }}>
               <div>
-                <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "3px", background: "var(--purple)", marginRight: 6 }} />
-                <strong>70%</strong> Holders &amp; Traders — {solFormat(agentPool.holderTraderAllocationSol)}
+                <strong>Holders + traders</strong> {solFormat(agentPool.holderTraderAllocationSol)}
               </div>
               <div>
-                <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "3px", background: "var(--mint)", marginRight: 6 }} />
-                <strong>30%</strong> Agents — {solFormat(agentPool.agentAllocationSol)}
+                <strong>Agents</strong> {solFormat(agentPool.agentAllocationSol)}
               </div>
             </div>
           </div>
 
-          {/* Agent leaderboard */}
           <div className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "16px",
+              }}
+            >
               <div className="section-title" style={{ color: "var(--mint)", margin: 0 }}>
-                Signal Leaderboard — Epoch #{agentPool.epochId}
+                Agent leaderboard
               </div>
               <div style={{ fontSize: "0.8rem", color: "var(--ink-muted)", fontWeight: 600 }}>
-                {agentPool.activeAgents} active agents &bull; {agentPool.totalSignalsThisEpoch} signals
+                {agentPool.activeAgents} active agents, {agentPool.totalSignalsThisEpoch} signals
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {agentPool.topAgents.map((agent, i) => {
-                const tier = TIER_STYLE[agent.tier] ?? TIER_STYLE.newcomer;
-                return (
-                  <div key={agent.agentId} style={{
-                    display: "flex", alignItems: "center", gap: "12px",
-                    padding: "12px 14px", borderRadius: "14px",
-                    background: i === 0 ? "linear-gradient(135deg, #f5f0ff, #fff0f9)" : "var(--bg)",
-                    border: `1.5px solid ${i === 0 ? "rgba(168,85,247,0.3)" : "var(--line)"}`,
-                  }}>
-                    <div style={{ fontWeight: 900, fontSize: "1.1rem", color: "var(--ink-muted)", width: "24px", textAlign: "center" }}>
-                      {i + 1}
+              {distribution.agents.slice(0, 5).map((agent) => (
+                <div
+                  key={agent.agentId}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    padding: "12px 14px",
+                    borderRadius: "14px",
+                    background: "var(--bg)",
+                    border: "1.5px solid var(--line)",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "var(--ink)" }}>
+                      {agent.displayName}
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "var(--ink)" }}>{agent.displayName}</div>
-                      <div style={{ fontSize: "0.75rem", color: "var(--ink-muted)" }}>
-                        {agent.totalSignals} signals &bull; {(agent.avgAccuracy * 100).toFixed(0)}% accuracy
-                      </div>
-                    </div>
-                    <div style={{ padding: "3px 10px", borderRadius: "999px", background: tier.bg, color: tier.color, fontSize: "0.72rem", fontWeight: 800 }}>
-                      {tier.label}
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontWeight: 900, fontSize: "0.95rem", color: "var(--purple)" }}>{agent.poolSharePct}%</div>
-                      <div style={{ fontSize: "0.72rem", color: "var(--ink-muted)" }}>pool share</div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontWeight: 900, fontSize: "0.95rem", color: "var(--mint)" }}>{solFormat(agent.totalEarnedSol)}</div>
-                      <div style={{ fontSize: "0.72rem", color: "var(--ink-muted)" }}>earned total</div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--ink-muted)" }}>
+                      {agent.metrics.signalsThisWindow} signals,{" "}
+                      {(agent.metrics.avgAccuracy * 100).toFixed(0)}% accuracy
                     </div>
                   </div>
-                );
-              })}
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontWeight: 900, fontSize: "0.95rem", color: "var(--purple)" }}>
+                      {solFormat(agent.allocationSol)}
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "var(--ink-muted)" }}>allocation</div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <p style={{ margin: "16px 0 0", fontSize: "0.8rem", color: "var(--ink-muted)", lineHeight: 1.6 }}>
-              Agents earn reputation by submitting accurate market signals each epoch. Bronze tier and above share the 30% agent allocation proportionally. Download the skill above to join.
-            </p>
           </div>
         </section>
       )}
 
-      {/* ── Intel Marketplace ── */}
-      {agentPool && (
-        <IntelMarketplace
-          agents={agentPool.topAgents}
-          holderId="holder_demo"
-        />
-      )}
+      {agentPool && <IntelMarketplace agents={agentPool.topAgents} holderId="holder_demo" />}
 
-      {/* ── Wallet Lookup ── */}
+      <section className="admin-grid" aria-label="Distribution admin">
+        <article className="card">
+          <div className="section-title" style={{ color: "var(--sky)", margin: 0 }}>
+            Payout Preview
+          </div>
+          <p className="section-body" style={{ marginTop: "10px" }}>
+            Top wallet allocations from the current epoch preview.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "16px" }}>
+            {distribution.addresses.slice(0, 5).map((entry) => (
+              <div
+                key={entry.address}
+                className="payout-row"
+                style={{
+                  display: "grid",
+                  gap: "10px",
+                  alignItems: "center",
+                  padding: "12px 14px",
+                  borderRadius: "14px",
+                  background: "var(--bg)",
+                  border: "1.5px solid var(--line)",
+                }}
+              >
+                <div style={{ fontWeight: 800, color: "var(--ink)" }}>{shortAddress(entry.address)}</div>
+                <div>
+                  <div className="card-label">Holder</div>
+                  <div style={{ fontWeight: 800, color: "var(--purple)" }}>
+                    {solFormat(entry.holderAllocationSol)}
+                  </div>
+                </div>
+                <div>
+                  <div className="card-label">Trader</div>
+                  <div style={{ fontWeight: 800, color: "var(--pink)" }}>
+                    {solFormat(entry.traderAllocationSol)}
+                  </div>
+                </div>
+                <div>
+                  <div className="card-label">Total</div>
+                  <div style={{ fontWeight: 900, color: "var(--mint)" }}>
+                    {solFormat(entry.totalAllocationSol)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="card">
+          <div className="section-title" style={{ color: "var(--peach)", margin: 0 }}>
+            Admin Controls
+          </div>
+          <p className="section-body" style={{ marginTop: "10px" }}>
+            Update the allocation ratios and scoring weights, then save to persist them in the
+            repo-backed JSON config.
+          </p>
+
+          <div className="admin-section">
+            <div className="section-title" style={{ color: "var(--purple)" }}>
+              Allocation Percentages
+            </div>
+            <div className="admin-form-grid">
+              <ConfigField
+                label="Holders %"
+                value={configDraft.allocation.holdersPct}
+                onChange={(value) => updateAllocation("holdersPct", value)}
+              />
+              <ConfigField
+                label="Traders %"
+                value={configDraft.allocation.tradersPct}
+                onChange={(value) => updateAllocation("tradersPct", value)}
+              />
+              <ConfigField
+                label="Agents %"
+                value={configDraft.allocation.agentsPct}
+                onChange={(value) => updateAllocation("agentsPct", value)}
+              />
+            </div>
+            <p className="footer-note" style={{ marginTop: "12px", paddingTop: "12px" }}>
+              Current total: {allocationTotal}%
+            </p>
+          </div>
+
+          <div className="admin-section">
+            <div className="section-title" style={{ color: "var(--pink)" }}>
+              Holder And Trader Weights
+            </div>
+            <div className="admin-form-grid">
+              <ConfigField
+                label="Holder balance"
+                value={configDraft.holderWeights.balance}
+                onChange={(value) => updateHolderWeight("balance", value)}
+              />
+              <ConfigField
+                label="Holder participation"
+                value={configDraft.holderWeights.participation}
+                onChange={(value) => updateHolderWeight("participation", value)}
+              />
+              <ConfigField
+                label="Trader losses"
+                value={configDraft.traderWeights.losses}
+                onChange={(value) => updateTraderWeight("losses", value)}
+              />
+              <ConfigField
+                label="Trader volume"
+                value={configDraft.traderWeights.volume}
+                onChange={(value) => updateTraderWeight("volume", value)}
+              />
+              <ConfigField
+                label="Trader participation"
+                value={configDraft.traderWeights.participation}
+                onChange={(value) => updateTraderWeight("participation", value)}
+              />
+            </div>
+          </div>
+
+          <div className="admin-section">
+            <div className="section-title" style={{ color: "var(--mint)" }}>
+              Agent Weights And Thresholds
+            </div>
+            <div className="admin-form-grid">
+              <ConfigField
+                label="Agent reputation"
+                value={configDraft.agentWeights.reputation}
+                onChange={(value) => updateAgentWeight("reputation", value)}
+              />
+              <ConfigField
+                label="Agent accuracy"
+                value={configDraft.agentWeights.accuracy}
+                onChange={(value) => updateAgentWeight("accuracy", value)}
+              />
+              <ConfigField
+                label="Agent signals"
+                value={configDraft.agentWeights.signals}
+                onChange={(value) => updateAgentWeight("signals", value)}
+              />
+              <ConfigField
+                label="Min holder balance"
+                value={configDraft.eligibility.holderMinBalance}
+                step={1}
+                onChange={(value) => updateEligibility("holderMinBalance", value)}
+              />
+              <ConfigField
+                label="Min trader losses"
+                value={configDraft.eligibility.traderMinLosses}
+                step={1}
+                onChange={(value) => updateEligibility("traderMinLosses", value)}
+              />
+              <ConfigField
+                label="Min activity count"
+                value={configDraft.eligibility.minActivityCount}
+                step={1}
+                onChange={(value) => updateEligibility("minActivityCount", value)}
+              />
+              <ConfigField
+                label="Min agent signals"
+                value={configDraft.eligibility.agentMinSignals}
+                step={1}
+                onChange={(value) => updateEligibility("agentMinSignals", value)}
+              />
+              <ConfigField
+                label="Agent epoch lookback"
+                value={configDraft.eligibility.activeAgentEpochLookback}
+                step={1}
+                onChange={(value) => updateEligibility("activeAgentEpochLookback", value)}
+              />
+            </div>
+          </div>
+
+          {saveMessage && (
+            <p
+              style={{
+                margin: "0 0 14px",
+                fontWeight: 700,
+                fontSize: "0.84rem",
+                color: saveMessage.startsWith("Saved") ? "var(--mint)" : "#e11d48",
+              }}
+            >
+              {saveMessage}
+            </p>
+          )}
+
+          <button
+            className="admin-button"
+            onClick={() => void saveDistributionConfig()}
+            disabled={savingConfig}
+          >
+            {savingConfig ? "Saving..." : "Save allocation parameters"}
+          </button>
+        </article>
+      </section>
+
       <section className="card" aria-label="Wallet lookup">
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-          <span style={{ fontSize: "1.4rem" }}>🔍</span>
-          <div className="section-title" style={{ color: "var(--sky)", margin: 0 }}>Check a Wallet</div>
+        <div className="section-title" style={{ color: "var(--sky)", margin: 0 }}>
+          Wallet Lookup
         </div>
-        <p className="section-body">
-          Pick any address below to see its SOL gains or losses this epoch. Full connect-and-claim is coming when $CLAWBACK goes live 🦞.
+        <p className="section-body" style={{ marginTop: "8px" }}>
+          Inspect the raw epoch stats beside the allocation preview for any wallet in the current
+          batch.
         </p>
 
         <label htmlFor="addressSelect" className="card-label" style={{ display: "block", marginTop: "16px" }}>
@@ -449,51 +884,101 @@ export function DashboardClient(): React.JSX.Element {
           id="addressSelect"
           className="select"
           value={selectedAddress}
-          onChange={(e) => setSelectedAddress(e.target.value)}
+          onChange={(event) => setSelectedAddress(event.target.value)}
         >
           {summary.addresses.map((entry) => (
             <option key={entry.address} value={entry.address}>
-              {shortAddress(entry.address)} — {solFormat(entry.netChange ?? 0)}
+              {shortAddress(entry.address)} - {solFormat(entry.netChange)}
             </option>
           ))}
         </select>
 
         {statsLoading && (
-          <div style={{ padding: "24px 0", textAlign: "center", color: "var(--ink-muted)", fontWeight: 700 }}>
-            Loading... ✨
+          <div
+            style={{
+              padding: "24px 0",
+              textAlign: "center",
+              color: "var(--ink-muted)",
+              fontWeight: 700,
+            }}
+          >
+            Loading wallet metrics...
           </div>
         )}
 
-        {!statsLoading && selectedStats && (
+        {!statsLoading && selectedStats && selectedDistribution && (
           <div className="statsRow">
-            <div style={{
-              background: "linear-gradient(135deg, var(--purple-lt), var(--pink-lt))",
-              padding: "18px", borderRadius: "18px",
-              border: "1.5px solid rgba(168,85,247,0.2)"
-            }}>
-              <div className="card-label" style={{ color: "var(--purple)" }}>Net SOL This Epoch</div>
+            <div
+              style={{
+                background: "linear-gradient(135deg, var(--purple-lt), var(--pink-lt))",
+                padding: "18px",
+                borderRadius: "18px",
+                border: "1.5px solid rgba(168,85,247,0.2)",
+              }}
+            >
+              <div className="card-label" style={{ color: "var(--purple)" }}>
+                Total Allocation
+              </div>
               <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "var(--purple)", marginTop: "4px" }}>
-                {solFormat(selectedStats.netChange)}
+                {solFormat(selectedDistribution.totalAllocationSol)}
               </div>
             </div>
-            <div style={{
-              background: "linear-gradient(135deg, var(--sky-lt), var(--mint-lt))",
-              padding: "18px", borderRadius: "18px",
-              border: "1.5px solid rgba(56,189,248,0.2)"
-            }}>
-              <div className="card-label" style={{ color: "var(--sky)" }}>Trading Events</div>
-              <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "var(--sky)", marginTop: "4px" }}>
-                {numberFormat(selectedStats.activityCount)}
+            <div
+              style={{
+                background: "linear-gradient(135deg, var(--sky-lt), var(--mint-lt))",
+                padding: "18px",
+                borderRadius: "18px",
+                border: "1.5px solid rgba(56,189,248,0.2)",
+              }}
+            >
+              <div className="card-label" style={{ color: "var(--sky)" }}>
+                Loss / Volume / Participation
+              </div>
+              <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "var(--sky)", marginTop: "6px" }}>
+                {numberFormat(selectedDistribution.metrics.losses)} /{" "}
+                {numberFormat(selectedDistribution.metrics.volume)} /{" "}
+                {numberFormat(selectedDistribution.metrics.participation)}
+              </div>
+            </div>
+            <div
+              style={{
+                background: "linear-gradient(135deg, var(--mint-lt), var(--sky-lt))",
+                padding: "18px",
+                borderRadius: "18px",
+                border: "1.5px solid rgba(16,185,129,0.2)",
+              }}
+            >
+              <div className="card-label" style={{ color: "var(--mint)" }}>
+                Holder / Trader Breakdown
+              </div>
+              <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "var(--mint)", marginTop: "6px" }}>
+                {solFormat(selectedDistribution.holderAllocationSol)} /{" "}
+                {solFormat(selectedDistribution.traderAllocationSol)}
+              </div>
+            </div>
+            <div
+              style={{
+                background: "linear-gradient(135deg, var(--peach-lt), var(--pink-lt))",
+                padding: "18px",
+                borderRadius: "18px",
+                border: "1.5px solid rgba(251,146,60,0.2)",
+              }}
+            >
+              <div className="card-label" style={{ color: "var(--peach)" }}>
+                Net Epoch Change
+              </div>
+              <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "var(--peach)", marginTop: "4px" }}>
+                {solFormat(selectedStats.netChange)}
               </div>
             </div>
           </div>
         )}
 
         <p className="footer-note">
-          🌱 This is a read-only preview of how refunds will look. When $CLAWBACK launches mainnet 🦞, connect your wallet here to claim SOL directly.
+          Preview values are derived directly from the latest epoch summary and the current
+          distribution config saved in <code>data/distribution-config.json</code>.
         </p>
       </section>
-
     </main>
   );
 }

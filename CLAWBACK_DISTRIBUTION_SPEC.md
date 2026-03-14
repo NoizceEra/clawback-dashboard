@@ -1,59 +1,245 @@
-# CLAWBACK Distribution Spec (v1)
+# CLAWBACK Distribution Spec
 
-Design for off-chain, epoch-based SOL refund distributions for the $CLAWBACK Pool.
+## 1. Purpose
 
-## 1. High-Level
+The dashboard now computes an epoch distribution preview directly from the existing treasury and epoch snapshot in `data/epoch-latest.json`, plus the agent reputation and signal datasets already used elsewhere in the repo.
 
-Every epoch (e.g. every 10 minutes):
+The system answers three questions each epoch:
 
-1. Creator rewards stream into a treasury wallet.
-2. A small platform fee is skimmed from creator rewards (5–10%) to fund operations and development.
-3. The remaining SOL becomes the epoch refund pool.
-4. The Accountant script computes per-address scores based on:
-   - Realized losses in the epoch.
-   - $CLAWBACK token holdings (size + persistence).
-5. The net pool is split proportionally by scores.
-6. A payout file is generated and used to send actual transfers.
+1. How much of the pool goes to holders, traders, and agents?
+2. Which addresses or agents are eligible?
+3. What SOL allocation does each participant receive under the current parameters?
 
-In v1 this logic lives entirely off-chain (Node/TypeScript script + cron), with no custom Solana program.
+The implementation is repo-local and JSON-backed:
 
-## 2. Platform Fee (Creator Reward Skim)
+- Config: `data/distribution-config.json`
+- Engine: `lib/distribution.ts`
+- API: `app/api/distribution/route.ts`
+- Admin UI: `app/ui/dashboard-client.tsx`
 
-- `CREATOR_REWARD_FEE_BPS` (basis points) controls the platform cut from raw creator rewards.
-  - Example: `500` (5%) to `1000` (10%).
-- Flow per funding event:
+## 2. Inputs
 
-```text
-R_total = raw creator rewards received (SOL)
-R_fee   = R_total * (CREATOR_REWARD_FEE_BPS / 10_000)
-R_pool  = R_total - R_fee
-```
+### Treasury / epoch input
 
-- `R_fee` is retained by the platform treasury for ops/dev.
-- `R_pool` is what the Accountant treats as `pool_size` for the epoch.
+`EpochSummary` from `data/epoch-latest.json` remains the source of truth for:
 
-The dashboard and Accountant should both treat `pool_size` as **net after creator skim**.
+- `epochId`
+- `openingBalance`
+- `closingBalance`
+- `activityCount`
+- `addresses[]`
 
-## 3. Future (Optional) Claim-Time Fee (v2+)
-
-Not active in v1, but planned for after launch:
-
-- Small claim-time fee (e.g. 1%) on **large payouts only** (for example, payouts > 1 SOL).
-- Small refunds (dust) remain fee-free.
-
-Sketch:
+The effective pool size is:
 
 ```text
-if reward_i > CLAIM_FEE_THRESHOLD_SOL:
-    claim_fee_i = reward_i * CLAIM_FEE_BPS / 10_000
-    reward_net_i = reward_i - claim_fee_i
-else:
-    claim_fee_i = 0
-    reward_net_i = reward_i
+total_pool_sol = epoch.agentPool.totalPoolSol
 ```
 
-This keeps the experience smooth for most users while letting big payouts contribute a bit more to platform sustainability.
+If `agentPool.totalPoolSol` is unavailable, the engine falls back to `closingBalance`.
 
----
+### Address-level input
 
-(Sections 4–7 from the previous spec remain the same: inputs, scoring formula, payout formula, Accountant responsibilities, automation, and future on-chain version.)
+Each `AddressStats` entry is transformed into allocation metrics:
+
+```text
+balance       = max(staked - unstaked, 0)
+losses        = max(-netChange, 0)
+volume        = staked + unstaked + claimed
+participation = activityCount
+```
+
+These are proxies derived from the current treasury-facing schema, so no new wallet ledger is required.
+
+### Agent input
+
+Agent scoring uses:
+
+- `data/agent-reputation.json`
+- `data/agent-signals.sample.json`
+
+The engine prefers signals matching the treasury epoch. If none exist, it uses the latest signal epoch present in the file and exposes that as `signalEpochUsed`.
+
+## 3. Config Model
+
+`data/distribution-config.json` stores:
+
+- Category allocation percentages
+- Holder scoring weights
+- Trader scoring weights
+- Agent scoring weights
+- Eligibility thresholds
+- Audit metadata (`updatedAt`, `updatedBy`)
+
+Default shape:
+
+```json
+{
+  "allocation": {
+    "holdersPct": 45,
+    "tradersPct": 25,
+    "agentsPct": 30
+  },
+  "holderWeights": {
+    "balance": 0.75,
+    "participation": 0.25
+  },
+  "traderWeights": {
+    "losses": 0.55,
+    "volume": 0.3,
+    "participation": 0.15
+  },
+  "agentWeights": {
+    "reputation": 0.5,
+    "accuracy": 0.3,
+    "signals": 0.2
+  },
+  "eligibility": {
+    "holderMinBalance": 100,
+    "traderMinLosses": 10,
+    "minActivityCount": 1,
+    "agentMinSignals": 1,
+    "activeAgentEpochLookback": 2
+  }
+}
+```
+
+Validation rules:
+
+- `holdersPct + tradersPct + agentsPct` must equal `100`
+- Each weight group must sum above `0`
+- `minActivityCount` must be non-negative
+
+## 4. Eligibility Rules
+
+### Holders
+
+A wallet is holder-eligible if:
+
+```text
+balance >= holderMinBalance
+participation >= minActivityCount
+```
+
+### Traders
+
+A wallet is trader-eligible if:
+
+```text
+losses >= traderMinLosses
+participation >= minActivityCount
+```
+
+### Agents
+
+An agent is eligible if:
+
+```text
+lastActiveEpoch >= latestAgentEpoch - activeAgentEpochLookback
+signalsThisWindow >= agentMinSignals
+```
+
+## 5. Scoring Formulas
+
+### Holder score
+
+```text
+holder_score =
+  (balance * holderWeights.balance) +
+  (participation * holderWeights.participation)
+```
+
+### Trader score
+
+```text
+trader_score =
+  (losses * traderWeights.losses) +
+  (volume * traderWeights.volume) +
+  (participation * traderWeights.participation)
+```
+
+### Agent score
+
+```text
+agent_score =
+  (reputationScore * agentWeights.reputation) +
+  ((avgAccuracy * 100) * agentWeights.accuracy) +
+  (signalsThisWindow * agentWeights.signals)
+```
+
+## 6. Pool Allocation
+
+Configured category pools are:
+
+```text
+holders_pool = total_pool_sol * holdersPct / 100
+traders_pool = total_pool_sol * tradersPct / 100
+agents_pool  = total_pool_sol * agentsPct  / 100
+```
+
+If a category has no eligible participants for the epoch, its share is not stranded. Instead, the engine rebalances the inactive share across active categories in proportion to their configured percentages.
+
+Example:
+
+```text
+configured: holders 45 / traders 25 / agents 30
+active: holders + agents only
+effective: holders 60 / agents 40
+```
+
+## 7. Per-Participant Payouts
+
+Within each active category:
+
+```text
+participant_allocation = category_pool * participant_score / sum(category_scores)
+```
+
+Wallet totals are:
+
+```text
+wallet_total = holderAllocationSol + traderAllocationSol
+```
+
+The distribution response returns:
+
+- `addresses[]`
+- `agents[]`
+- `pools.configured`
+- `pools.effective`
+- `pools.allocatedSol`
+- `pools.unallocatedSol`
+
+## 8. API Contract
+
+### `GET /api/distribution`
+
+Returns the computed distribution summary for the latest epoch, including config, effective pools, per-address allocations, and per-agent allocations.
+
+### `POST /api/distribution`
+
+Accepts a full or partial config payload, merges it into the current config, validates it, persists it to `data/distribution-config.json`, and returns the recomputed summary.
+
+This route is intentionally aligned with the repo's existing JSON-backed API pattern used by request and epoch handlers.
+
+## 9. UI Behavior
+
+The dashboard now includes a small admin section that:
+
+- Shows top wallet payouts
+- Shows current holder/trader/agent splits
+- Exposes editable weight and eligibility inputs
+- Saves changes through `POST /api/distribution`
+- Refreshes the live preview after each save
+
+The wallet lookup panel also shows the selected address's:
+
+- Total projected allocation
+- Holder allocation component
+- Trader allocation component
+- Loss / volume / participation metrics
+
+## 10. Operational Notes
+
+- The feature is read/write only against committed JSON files in this repo.
+- No new external storage or contract dependency is required.
+- `next build` may be blocked in restricted sandboxes that disallow worker spawning; use `npx tsc --noEmit` as the baseline type check in those environments.

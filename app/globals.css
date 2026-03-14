@@ -346,6 +346,65 @@ body {
 
 .statsRow p { margin: 0; }
 
+.admin-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.admin-section {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1.5px dashed var(--line);
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1.5px solid var(--line-strong);
+  background: var(--bg);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.admin-input:focus {
+  outline: none;
+  border-color: var(--purple);
+  box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.12);
+}
+
+.admin-button {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, var(--purple), var(--pink));
+  color: white;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.admin-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.payout-row {
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+}
+
 /* ─── Footer Note ──────────────────────────────────────────── */
 
 .footer-note {
@@ -365,4 +424,7 @@ body {
   .hero-row  { grid-template-columns: 1fr; }
   .grid      { grid-template-columns: 1fr; }
   .how-grid  { grid-template-columns: 1fr; }
+  .admin-grid { grid-template-columns: 1fr; }
+  .admin-form-grid { grid-template-columns: 1fr; }
+  .payout-row { grid-template-columns: 1fr 1fr; }
 }

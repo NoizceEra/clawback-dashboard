@@ -1,158 +1,154 @@
-# Clawback Dashboard — Operations Playbook
+# Clawback Dashboard Operations Playbook
 
-Single source of truth for deploying, maintaining, and safely operating the Clawback dashboard.
+Single source of truth for deploying, operating, and adjusting the dashboard and distribution preview system.
 
----
+## 1. Overview
 
-## 1. Overview & Stack
-
-- **What it is:** Dashboard for tracking Clawback distributions, positions, and status.
-- **Tech stack:**
-  - Next.js / App Router (`app/`, `next.config.mjs`, `next-env.d.ts`)
-  - TypeScript (`tsconfig.json`, `types/`)
-  - UI + charts in `app/` and `lib/`
-  - Data files in `data/` (CSV/JSON for distributions, etc.)
-  - Agent skills in `skills/` for automated ingestion/updates
-  - Hosting: Vercel (see `.vercel/`)
+- App framework: Next.js App Router
+- Main data files: `data/epoch-latest.json`, `data/agent-reputation.json`, `data/agent-signals.sample.json`
+- Distribution config: `data/distribution-config.json`
+- Distribution engine: `lib/distribution.ts`
+- Distribution API: `app/api/distribution/route.ts`
+- Main UI: `app/ui/dashboard-client.tsx`
 
 Key docs:
 
-- `README.md` — overview
-- `DEPLOYMENT.md` — deployment instructions
-- `CLAWBACK_DISTRIBUTION_SPEC.md` — how distribution data is structured
+- `README.md`
+- `DEPLOYMENT.md`
+- `CLAWBACK_DISTRIBUTION_SPEC.md`
 
----
+## 2. Environments And Secrets
 
-## 2. Environments & Secrets
-
-### Env
-
-- Template: `.env.example`
-- Actual: `.env` (local only) + Vercel env vars for production
-
-Typical env vars (check `.env.example` for concrete names):
-
-- `NEXT_PUBLIC_BASE_URL` or similar
-- Any API keys used for data fetching (e.g., sheets, storage)
+- Local env template: `.env.example`
+- Local env file: `.env`
+- Production env: Vercel project settings
 
 Hardening rules:
 
-- [ ] No secrets in `data/` — treat `data/` as safe-to-commit public reference data.
-- [ ] Only server-side code (not browser bundle) reads private env vars.
-- [ ] Separate read-only tokens for public dashboards vs full admin access.
-
----
+- No secrets in `data/`
+- Server-only env vars stay out of client bundles
+- Treat all JSON in `data/` as public reference state
 
 ## 3. Deployment
 
 ### Local development
 
-1. Copy `.env.example` → `.env` and fill values.
-2. Install dependencies:
-   - `npm install`
-3. Run dev server:
-   - `npm run dev`
+1. Create `.env` from `.env.example`.
+2. Install dependencies with `npm install`.
+3. Run `npm run dev`.
 4. Open `http://localhost:3000`.
 
-Details: see `DEPLOYMENT.md`.
+### Production
 
-### Vercel
+1. Push the branch or trigger a Vercel deployment.
+2. Confirm env vars are present.
+3. Load `/` and `/api/distribution`.
+4. Confirm the dashboard renders the latest epoch and distribution preview.
 
-1. Connect repo to Vercel.
-2. Configure env vars from `.env.example`.
-3. Deploy via git push or Vercel UI.
-4. When distribution data changes, update `data/` or configure skills in `skills/` to pull from canonical sources.
+## 4. Distribution Operations
 
----
+### Source of truth
 
-## 4. Operations & Heartbeats
+The preview is computed from:
 
-### Operational tasks
+- `data/epoch-latest.json`
+- `data/agent-reputation.json`
+- `data/agent-signals.sample.json`
+- `data/distribution-config.json`
 
-- Render check: landing page responds with 200 and loads main chart/data.
-- Data freshness: distribution data is up-to-date with source of truth.
-- Error monitoring: Next.js logs show no recurring failures.
+The operator-editable control plane is `data/distribution-config.json`.
 
-### Heartbeat integration
+### Supported operator actions
 
-Use global optimizer from workspace root:
+- Adjust holder / trader / agent split percentages
+- Adjust holder, trader, and agent scoring weights
+- Adjust eligibility thresholds
+- Preview the resulting per-address and per-agent allocations before deploy
 
-- `HEARTBEAT.md`, `HEARTBEAT_SERVICE.md`
-- `scripts/heartbeat_optimizer.py`, `model_router.py`
+### Validation invariants
 
-Recommended heartbeat type:
+Before saving config changes, ensure:
 
-- Name: `clawback-dashboard`
-- Interval: 30–60 minutes.
-- Model: Haiku.
-- Behavior: hit `/` and verify basic invariants (status 200, key text present).
+- `holdersPct + tradersPct + agentsPct = 100`
+- Each weight group is greater than zero in total
+- Thresholds are non-negative and make business sense for the current epoch sample
+- `GET /api/distribution` returns `200`
 
-Pseudo snippet for `HEARTBEAT.md`:
+## 5. Runbooks
 
-```bash
-result=$(python3 scripts/heartbeat_optimizer.py check clawback-dashboard)
-should_check=$(echo $result | jq -r .should_check)
-
-if [ "$should_check" = "true" ]; then
-  python3 scripts/check_clawback_dashboard.py
-  python3 scripts/heartbeat_optimizer.py record clawback-dashboard
-fi
-```
-
-Where `scripts/check_clawback_dashboard.py` is a tiny HTTP check script.
-
----
-
-## 5. Security Hardening Checklist
-
-- [ ] Only static/public data checked into `data/` — no wallet secrets, private addresses, or API keys.
-- [ ] API keys (if any) scoped read-only and limited by IP/domain.
-- [ ] Next.js API routes secured; no unauthenticated destructive actions.
-- [ ] Vercel project access limited to trusted accounts; 2FA enabled.
-- [ ] Dependencies scanned periodically (`npm audit`).
-- [ ] No direct exposure of internal Clawback control endpoints from this dashboard.
-
----
-
-## 6. Shilling & Launch Playbook
-
-- **Primary URL:** `<fill-in-prod-url>`
-- **What to say:**
-  - "Clawback Dashboard gives a transparent view of how the Clawback engine is distributing recovered funds."
-  - Highlights: transparency, safety, and automation.
-- **Assets:**
-  - Screenshots of main dashboard views.
-  - Short explanation of Clawback mechanism (link to `CLAWBACK_NOTES.md` in root if relevant).
-
-Launch checklist:
-
-- [ ] Confirm dashboard matches latest distribution spec (`CLAWBACK_DISTRIBUTION_SPEC.md`).
-- [ ] Production deploy green; test on mobile + desktop.
-- [ ] Public link shared in relevant channels (Discord, X, Molt guilds).
-- [ ] OPERATIONS_PLAYBOOK.md linked from `MULTIPROJECT_OPERATIONS_INDEX.md` (root).
-
----
-
-## 7. Runbooks
-
-### Cold-start
+### Cold start
 
 1. Read this file.
-2. Skim `README.md` and `DEPLOYMENT.md`.
-3. Bootstrap `.env` from `.env.example`.
-4. Run dev server; ensure data loads.
+2. Review `CLAWBACK_DISTRIBUTION_SPEC.md`.
+3. Run `npm install` if dependencies are missing.
+4. Start the app with `npm run dev`.
+5. Load `/` and confirm the admin panel and payout preview appear.
 
-### Update distributions
+### Recompute epoch input
 
-1. Edit `data/` CSV/JSON to match `CLAWBACK_DISTRIBUTION_SPEC.md`.
-2. Run local build to ensure no type errors.
-3. Commit + deploy.
+1. Update the activity source file if needed.
+2. Run `npm run compute:epoch`.
+3. Reload the dashboard.
+4. Confirm `/api/epoch/latest` and `/api/distribution` both reflect the new epoch.
 
-### Incident: dashboard down
+### Adjust allocation parameters
 
-1. Check Vercel status + deploy logs.
-2. Confirm env vars present and correct.
-3. Roll back to last good deployment if needed.
-4. Inspect `data/` for malformed JSON/CSV.
+1. Open the dashboard admin section.
+2. Update percentages, weights, or thresholds.
+3. Save through the UI.
+4. Confirm the success message and updated preview.
+5. Inspect `data/distribution-config.json` to verify the persisted values and `updatedAt`.
 
-Keep this file updated as Clawback architecture and requirements evolve.
+### API-only parameter update
+
+1. Send `POST /api/distribution` with the desired config fields.
+2. Confirm the response includes the recomputed summary.
+3. Verify `data/distribution-config.json` changed as expected.
+4. Refresh `/` to confirm the UI matches the API response.
+
+### Verification checklist after any distribution change
+
+1. Run `npx tsc --noEmit`.
+2. Load `/api/distribution`.
+3. Check that `pools.allocatedSol` is effectively the full pool and `unallocatedSol` is near zero.
+4. Confirm top wallet and top agent payouts look reasonable for the current sample data.
+5. Confirm the wallet lookup panel shows allocation breakdowns.
+
+Note:
+
+- In restricted sandboxes, `next build` may fail with `spawn EPERM` because Next.js cannot fork worker processes. In that case, use `npx tsc --noEmit` as the required verification step.
+
+### Incident: distribution API failing
+
+1. Call `/api/distribution` directly and capture the error payload.
+2. Validate the JSON syntax of:
+   - `data/epoch-latest.json`
+   - `data/agent-reputation.json`
+   - `data/agent-signals.sample.json`
+   - `data/distribution-config.json`
+3. Check that allocation percentages still sum to `100`.
+4. Run `npx tsc --noEmit`.
+5. Roll back the last config or data change if needed.
+
+### Incident: dashboard renders but preview looks wrong
+
+1. Compare `/api/epoch/latest` with `/api/distribution`.
+2. Verify eligibility thresholds in `data/distribution-config.json`.
+3. Check whether `signalEpochUsed` fell back to a different agent signal epoch.
+4. Confirm the epoch sample has enough eligible holders, traders, or agents.
+5. If a category is empty, verify the effective pool rebalance matches the spec.
+
+## 6. Security Checklist
+
+- No destructive unauthenticated routes beyond controlled JSON config writes in repo-local dev usage
+- No wallet secrets or API secrets checked into `data/`
+- Vercel access restricted to trusted operators
+- Dependency health checked periodically
+
+## 7. Launch Checklist
+
+- Distribution spec matches implementation
+- Dashboard works on desktop and mobile
+- `/api/distribution` returns valid allocations
+- Agent pool and wallet lookup remain in sync with the distribution engine
+- Docs updated after any formula or config shape change
