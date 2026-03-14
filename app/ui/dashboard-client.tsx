@@ -9,6 +9,10 @@ import type {
 import type { AddressStats, EpochSummary } from "../../types/epoch";
 import { IntelMarketplace } from "./intel-marketplace";
 
+// ─────────────────────────────────────────────────────────────
+// Small format helpers
+// ─────────────────────────────────────────────────────────────
+
 function numberFormat(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
@@ -25,6 +29,10 @@ function shortAddress(address: string): string {
 function percentageFormat(value: number): string {
   return `${numberFormat(value)}%`;
 }
+
+// ─────────────────────────────────────────────────────────────
+// Presentational atoms
+// ─────────────────────────────────────────────────────────────
 
 function StatCard({
   title,
@@ -92,6 +100,10 @@ function ConfigField({
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Main dashboard
+// ─────────────────────────────────────────────────────────────
+
 export function DashboardClient(): React.JSX.Element {
   const [summary, setSummary] = useState<EpochSummary | null>(null);
   const [distribution, setDistribution] = useState<DistributionSummary | null>(null);
@@ -104,7 +116,9 @@ export function DashboardClient(): React.JSX.Element {
   const [savingConfig, setSavingConfig] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string>("");
   const [agentPool, setAgentPool] = useState<AgentPoolSummary | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
+  // Initial load
   useEffect(() => {
     let active = true;
 
@@ -160,6 +174,7 @@ export function DashboardClient(): React.JSX.Element {
     };
   }, []);
 
+  // Per-address stats
   useEffect(() => {
     let active = true;
 
@@ -193,12 +208,14 @@ export function DashboardClient(): React.JSX.Element {
     };
   }, [selectedAddress]);
 
+  // Derived metrics
   const generatedAt = useMemo(() => {
     if (!summary) return "";
     return new Date(summary.generatedAt).toLocaleString();
   }, [summary]);
 
   const holderCount = summary?.addresses.length ?? 0;
+
   const avgReward = useMemo(() => {
     if (!distribution || distribution.addresses.length === 0) return 0;
     return (
@@ -208,9 +225,20 @@ export function DashboardClient(): React.JSX.Element {
   }, [distribution]);
 
   const treasuryAmount = distribution?.pools.totalPoolSol ?? summary?.closingBalance ?? 0;
+
   const selectedDistribution = useMemo(() => {
     return distribution?.addresses.find((entry) => entry.address === selectedAddress) ?? null;
   }, [distribution, selectedAddress]);
+
+  const poolDelta = (summary?.closingBalance ?? 0) - (summary?.openingBalance ?? 0);
+
+  const allocationTotal = configDraft
+    ? configDraft.allocation.holdersPct +
+      configDraft.allocation.tradersPct +
+      configDraft.allocation.agentsPct
+    : 0;
+
+  // ── Config updaters ───────────────────────────────────────
 
   function updateAllocation(
     key: keyof DistributionConfig["allocation"],
@@ -297,6 +325,8 @@ export function DashboardClient(): React.JSX.Element {
     );
   }
 
+  // ── Save config ───────────────────────────────────────────
+
   async function saveDistributionConfig(): Promise<void> {
     if (!configDraft) return;
 
@@ -344,6 +374,8 @@ export function DashboardClient(): React.JSX.Element {
     }
   }
 
+  // ── Loading + error states ────────────────────────────────
+
   if (loading) {
     return (
       <main className="container">
@@ -368,30 +400,27 @@ export function DashboardClient(): React.JSX.Element {
     );
   }
 
-  const poolDelta = summary.closingBalance - summary.openingBalance;
-  const allocationTotal =
-    configDraft.allocation.holdersPct +
-    configDraft.allocation.tradersPct +
-    configDraft.allocation.agentsPct;
+  // ── Main layout ───────────────────────────────────────────
 
   return (
     <main className="container">
+      {/* Primary hero */}
       <header className="header">
         <div className="header-badge">Live Rewards</div>
         <h1>$CLAWBACK Rewards</h1>
         <p className="tagline">
-          The treasury rolls each epoch into an automatic distribution across holders, traders,
-          and agents with parameters the operations team can tune from this dashboard.
+          A simple, normie-friendly view of how the treasury turns into rewards for holders,
+          traders, and agents every epoch.
         </p>
       </header>
 
-      <section className="hero-row">
+      {/* Overview: high-level story + key numbers */}
+      <section className="hero-row" aria-label="Epoch overview">
         <article className="hero-card">
-          <h2 className="hero-title">Auto-allocation engine</h2>
+          <h2 className="hero-title">Automatic rewards, every epoch</h2>
           <p className="hero-subtitle">
-            Each epoch uses the latest treasury snapshot, classifies eligible wallets, scores
-            losses, balance, volume, and participation, then routes the pool across holders,
-            traders, and agents.
+            Each epoch, the system looks at the latest treasury snapshot, finds eligible wallets,
+            scores their activity, and allocates the pool across holders, traders, and agents.
           </p>
           <div className="hero-pill-row">
             <span className="hero-pill">Epoch #{summary.epochId}</span>
@@ -400,8 +429,8 @@ export function DashboardClient(): React.JSX.Element {
             <span className="hero-pill">{percentageFormat(configDraft.allocation.agentsPct)} agents</span>
           </div>
           <p className="hero-footnote">
-            If one bucket has no eligible recipients, its share is rebalanced across the active
-            categories so the full pool still gets allocated.
+            If one group has no eligible wallets, its share automatically flows into the remaining
+            active groups so the full pool is always distributed.
           </p>
         </article>
 
@@ -439,7 +468,7 @@ export function DashboardClient(): React.JSX.Element {
             className="hero-metric-card"
             style={{ borderColor: "rgba(236,72,153,0.3)", background: "var(--pink-lt)" }}
           >
-            <div className="hero-metric-label">Average Address Payout</div>
+            <div className="hero-metric-label">Avg. Address Payout</div>
             <div className="hero-metric-value" style={{ color: "var(--pink)" }}>
               {solFormat(avgReward)}
             </div>
@@ -453,69 +482,71 @@ export function DashboardClient(): React.JSX.Element {
         </div>
       </section>
 
-      <section className="grid" aria-label="Distribution stats">
+      {/* Core distribution picture */}
+      <section className="grid" aria-label="Distribution snapshot">
         <StatCard
           title="Configured Split"
           label="Holder / Trader / Agent"
           value={`${configDraft.allocation.holdersPct} / ${configDraft.allocation.tradersPct} / ${configDraft.allocation.agentsPct}`}
           valueColor="var(--purple)"
           accentColor="var(--purple)"
-          body="Percentages are validated to 100% before the new settings are saved."
+          body="These are the target percentages before any eligibility rules are applied."
         />
         <StatCard
           title="Effective Split"
           label="Current active categories"
           value={`${solFormat(distribution.pools.effective.holders)} / ${solFormat(distribution.pools.effective.traders)} / ${solFormat(distribution.pools.effective.agents)}`}
           accentColor="var(--pink)"
-          body="Inactive categories are temporarily rebalanced into the remaining buckets."
+          body="If a group has no eligible wallets, its share is temporarily rebalanced into the others."
         />
         <StatCard
           title="Pool Delta"
-          label="Treasury movement this epoch"
+          label="Treasury move this epoch"
           value={`${poolDelta >= 0 ? "+" : ""}${solFormat(poolDelta)}`}
           valueColor={poolDelta >= 0 ? "var(--mint)" : "#e11d48"}
           accentColor="var(--mint)"
-          body={`${solFormat(summary.openingBalance)} to ${solFormat(summary.closingBalance)}`}
+          body={`${solFormat(summary.openingBalance)}  b7 ${solFormat(summary.closingBalance)}`}
         />
         <StatCard
           title="Signal Window"
           label="Agent scoring epoch"
           value={
             distribution.signalEpochUsed === null
-              ? "No signals"
+              ? "No signals used"
               : `Epoch ${distribution.signalEpochUsed}`
           }
           accentColor="var(--peach)"
-          body="If signal epochs do not match the treasury epoch, the latest available signal window is used."
+          body="When signal epochs lag behind the treasury epoch, the latest available window is used."
         />
       </section>
 
-      <section className="grid" aria-label="How it works and epoch details">
+      {/* How it works + eligibility in plain language */}
+      <section className="grid" aria-label="How rewards are calculated">
         <article className="card">
           <div className="section-title" style={{ color: "var(--purple)", margin: 0 }}>
-            Scoring Rules
+            How scoring works
           </div>
           <div className="how-grid">
             <div className="how-step">
               <div className="how-step-title">Holders</div>
               <div className="how-step-body">
-                Score = balance * {configDraft.holderWeights.balance} + participation *{" "}
+                Score = balance  d7 {configDraft.holderWeights.balance} + participation  d7{" "}
                 {configDraft.holderWeights.participation}
               </div>
             </div>
             <div className="how-step">
               <div className="how-step-title">Traders</div>
               <div className="how-step-body">
-                Score = losses * {configDraft.traderWeights.losses} + volume *{" "}
-                {configDraft.traderWeights.volume} + participation *{" "}
+                Score = losses  d7 {configDraft.traderWeights.losses} + volume  d7{" "}
+                {configDraft.traderWeights.volume} + participation  d7{" "}
                 {configDraft.traderWeights.participation}
               </div>
             </div>
             <div className="how-step">
               <div className="how-step-title">Agents</div>
               <div className="how-step-body">
-                Score = reputation * {configDraft.agentWeights.reputation} + accuracy *{" "}
-                {configDraft.agentWeights.accuracy} + signals *{" "}
+                Score = reputation  d7 {configDraft.agentWeights.reputation} + accuracy  d7{" "}
+                {configDraft.agentWeights.accuracy} + signals  d7{" "}
                 {configDraft.agentWeights.signals}
               </div>
             </div>
@@ -524,22 +555,31 @@ export function DashboardClient(): React.JSX.Element {
 
         <article className="card">
           <div className="section-title" style={{ color: "var(--pink)", margin: 0 }}>
-            Eligibility
+            Who qualifies
           </div>
           <div className="section-body" style={{ marginTop: "12px" }}>
             Holders need at least {numberFormat(configDraft.eligibility.holderMinBalance)} net
             balance and {numberFormat(configDraft.eligibility.minActivityCount)} activity events.
             Traders need at least {numberFormat(configDraft.eligibility.traderMinLosses)} loss
-            proxy and the same activity minimum. Agents need{" "}
-            {numberFormat(configDraft.eligibility.agentMinSignals)} signals within the chosen
+            proxy and the same activity minimum. Agents need
+            {" "}
+            {numberFormat(configDraft.eligibility.agentMinSignals)} signals inside the chosen
             signal window.
           </div>
         </article>
       </section>
 
+      {/* Agent economy */}
       {agentPool && (
-        <section style={{ marginBottom: "24px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "18px" }}>
+        <section style={{ marginBottom: "24px" }} aria-label="Agent economy overview">
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              marginBottom: "18px",
+            }}
+          >
             <div>
               <div
                 style={{
@@ -553,7 +593,7 @@ export function DashboardClient(): React.JSX.Element {
                 A2A Economy
               </div>
               <div style={{ fontSize: "1.2rem", fontWeight: 900, color: "var(--ink)" }}>
-                Agent Pool Preview
+                Agent pool preview
               </div>
             </div>
             <a
@@ -658,15 +698,19 @@ export function DashboardClient(): React.JSX.Element {
                       {agent.displayName}
                     </div>
                     <div style={{ fontSize: "0.75rem", color: "var(--ink-muted)" }}>
-                      {agent.metrics.signalsThisWindow} signals,{" "}
+                      {agent.metrics.signalsThisWindow} signals, {" "}
                       {(agent.metrics.avgAccuracy * 100).toFixed(0)}% accuracy
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontWeight: 900, fontSize: "0.95rem", color: "var(--purple)" }}>
+                    <div
+                      style={{ fontWeight: 900, fontSize: "0.95rem", color: "var(--purple)" }}
+                    >
                       {solFormat(agent.allocationSol)}
                     </div>
-                    <div style={{ fontSize: "0.72rem", color: "var(--ink-muted)" }}>allocation</div>
+                    <div style={{ fontSize: "0.72rem", color: "var(--ink-muted)" }}>
+                      allocation
+                    </div>
                   </div>
                 </div>
               ))}
@@ -677,15 +721,23 @@ export function DashboardClient(): React.JSX.Element {
 
       {agentPool && <IntelMarketplace agents={agentPool.topAgents} holderId="holder_demo" />}
 
-      <section className="admin-grid" aria-label="Distribution admin">
+      {/* Distribution preview + advanced controls */}
+      <section className="admin-grid" aria-label="Distribution preview and controls">
         <article className="card">
           <div className="section-title" style={{ color: "var(--sky)", margin: 0 }}>
-            Payout Preview
+            Payout preview
           </div>
           <p className="section-body" style={{ marginTop: "10px" }}>
-            Top wallet allocations from the current epoch preview.
+            A quick look at the top wallet allocations in the current epoch preview.
           </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "16px" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+              marginTop: "16px",
+            }}
+          >
             {distribution.addresses.slice(0, 5).map((entry) => (
               <div
                 key={entry.address}
@@ -700,7 +752,9 @@ export function DashboardClient(): React.JSX.Element {
                   border: "1.5px solid var(--line)",
                 }}
               >
-                <div style={{ fontWeight: 800, color: "var(--ink)" }}>{shortAddress(entry.address)}</div>
+                <div style={{ fontWeight: 800, color: "var(--ink)" }}>
+                  {shortAddress(entry.address)}
+                </div>
                 <div>
                   <div className="card-label">Holder</div>
                   <div style={{ fontWeight: 800, color: "var(--purple)" }}>
@@ -725,160 +779,195 @@ export function DashboardClient(): React.JSX.Element {
         </article>
 
         <article className="card">
-          <div className="section-title" style={{ color: "var(--peach)", margin: 0 }}>
-            Admin Controls
-          </div>
-          <p className="section-body" style={{ marginTop: "10px" }}>
-            Update the allocation ratios and scoring weights, then save to persist them in the
-            repo-backed JSON config.
-          </p>
-
-          <div className="admin-section">
-            <div className="section-title" style={{ color: "var(--purple)" }}>
-              Allocation Percentages
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+            }}
+          >
+            <div>
+              <div className="section-title" style={{ color: "var(--peach)", margin: 0 }}>
+                Advanced controls
+              </div>
+              <p className="section-body" style={{ marginTop: "8px" }}>
+                Adjust how the pool is split and how wallets are scored. Changes are saved to the
+                repo-backed JSON config.
+              </p>
             </div>
-            <div className="admin-form-grid">
-              <ConfigField
-                label="Holders %"
-                value={configDraft.allocation.holdersPct}
-                onChange={(value) => updateAllocation("holdersPct", value)}
-              />
-              <ConfigField
-                label="Traders %"
-                value={configDraft.allocation.tradersPct}
-                onChange={(value) => updateAllocation("tradersPct", value)}
-              />
-              <ConfigField
-                label="Agents %"
-                value={configDraft.allocation.agentsPct}
-                onChange={(value) => updateAllocation("agentsPct", value)}
-              />
-            </div>
-            <p className="footer-note" style={{ marginTop: "12px", paddingTop: "12px" }}>
-              Current total: {allocationTotal}%
-            </p>
-          </div>
-
-          <div className="admin-section">
-            <div className="section-title" style={{ color: "var(--pink)" }}>
-              Holder And Trader Weights
-            </div>
-            <div className="admin-form-grid">
-              <ConfigField
-                label="Holder balance"
-                value={configDraft.holderWeights.balance}
-                onChange={(value) => updateHolderWeight("balance", value)}
-              />
-              <ConfigField
-                label="Holder participation"
-                value={configDraft.holderWeights.participation}
-                onChange={(value) => updateHolderWeight("participation", value)}
-              />
-              <ConfigField
-                label="Trader losses"
-                value={configDraft.traderWeights.losses}
-                onChange={(value) => updateTraderWeight("losses", value)}
-              />
-              <ConfigField
-                label="Trader volume"
-                value={configDraft.traderWeights.volume}
-                onChange={(value) => updateTraderWeight("volume", value)}
-              />
-              <ConfigField
-                label="Trader participation"
-                value={configDraft.traderWeights.participation}
-                onChange={(value) => updateTraderWeight("participation", value)}
-              />
-            </div>
-          </div>
-
-          <div className="admin-section">
-            <div className="section-title" style={{ color: "var(--mint)" }}>
-              Agent Weights And Thresholds
-            </div>
-            <div className="admin-form-grid">
-              <ConfigField
-                label="Agent reputation"
-                value={configDraft.agentWeights.reputation}
-                onChange={(value) => updateAgentWeight("reputation", value)}
-              />
-              <ConfigField
-                label="Agent accuracy"
-                value={configDraft.agentWeights.accuracy}
-                onChange={(value) => updateAgentWeight("accuracy", value)}
-              />
-              <ConfigField
-                label="Agent signals"
-                value={configDraft.agentWeights.signals}
-                onChange={(value) => updateAgentWeight("signals", value)}
-              />
-              <ConfigField
-                label="Min holder balance"
-                value={configDraft.eligibility.holderMinBalance}
-                step={1}
-                onChange={(value) => updateEligibility("holderMinBalance", value)}
-              />
-              <ConfigField
-                label="Min trader losses"
-                value={configDraft.eligibility.traderMinLosses}
-                step={1}
-                onChange={(value) => updateEligibility("traderMinLosses", value)}
-              />
-              <ConfigField
-                label="Min activity count"
-                value={configDraft.eligibility.minActivityCount}
-                step={1}
-                onChange={(value) => updateEligibility("minActivityCount", value)}
-              />
-              <ConfigField
-                label="Min agent signals"
-                value={configDraft.eligibility.agentMinSignals}
-                step={1}
-                onChange={(value) => updateEligibility("agentMinSignals", value)}
-              />
-              <ConfigField
-                label="Agent epoch lookback"
-                value={configDraft.eligibility.activeAgentEpochLookback}
-                step={1}
-                onChange={(value) => updateEligibility("activeAgentEpochLookback", value)}
-              />
-            </div>
-          </div>
-
-          {saveMessage && (
-            <p
+            <button
+              type="button"
+              onClick={() => setShowAdvanced((current) => !current)}
               style={{
-                margin: "0 0 14px",
-                fontWeight: 700,
-                fontSize: "0.84rem",
-                color: saveMessage.startsWith("Saved") ? "var(--mint)" : "#e11d48",
+                borderRadius: "999px",
+                border: "1.5px solid var(--line-strong)",
+                padding: "8px 14px",
+                fontSize: "0.8rem",
+                fontWeight: 800,
+                background: "var(--bg)",
+                cursor: "pointer",
               }}
             >
-              {saveMessage}
-            </p>
-          )}
+              {showAdvanced ? "Hide" : "Show"} controls
+            </button>
+          </div>
 
-          <button
-            className="admin-button"
-            onClick={() => void saveDistributionConfig()}
-            disabled={savingConfig}
-          >
-            {savingConfig ? "Saving..." : "Save allocation parameters"}
-          </button>
+          {showAdvanced && (
+            <>
+              <div className="admin-section">
+                <div className="section-title" style={{ color: "var(--purple)" }}>
+                  Allocation percentages
+                </div>
+                <div className="admin-form-grid">
+                  <ConfigField
+                    label="Holders %"
+                    value={configDraft.allocation.holdersPct}
+                    onChange={(value) => updateAllocation("holdersPct", value)}
+                  />
+                  <ConfigField
+                    label="Traders %"
+                    value={configDraft.allocation.tradersPct}
+                    onChange={(value) => updateAllocation("tradersPct", value)}
+                  />
+                  <ConfigField
+                    label="Agents %"
+                    value={configDraft.allocation.agentsPct}
+                    onChange={(value) => updateAllocation("agentsPct", value)}
+                  />
+                </div>
+                <p className="footer-note" style={{ marginTop: "12px", paddingTop: "12px" }}>
+                  Current total: {allocationTotal}% (must equal 100% to save).
+                </p>
+              </div>
+
+              <div className="admin-section">
+                <div className="section-title" style={{ color: "var(--pink)" }}>
+                  Holder & trader weights
+                </div>
+                <div className="admin-form-grid">
+                  <ConfigField
+                    label="Holder balance"
+                    value={configDraft.holderWeights.balance}
+                    onChange={(value) => updateHolderWeight("balance", value)}
+                  />
+                  <ConfigField
+                    label="Holder participation"
+                    value={configDraft.holderWeights.participation}
+                    onChange={(value) => updateHolderWeight("participation", value)}
+                  />
+                  <ConfigField
+                    label="Trader losses"
+                    value={configDraft.traderWeights.losses}
+                    onChange={(value) => updateTraderWeight("losses", value)}
+                  />
+                  <ConfigField
+                    label="Trader volume"
+                    value={configDraft.traderWeights.volume}
+                    onChange={(value) => updateTraderWeight("volume", value)}
+                  />
+                  <ConfigField
+                    label="Trader participation"
+                    value={configDraft.traderWeights.participation}
+                    onChange={(value) => updateTraderWeight("participation", value)}
+                  />
+                </div>
+              </div>
+
+              <div className="admin-section">
+                <div className="section-title" style={{ color: "var(--mint)" }}>
+                  Agent weights & thresholds
+                </div>
+                <div className="admin-form-grid">
+                  <ConfigField
+                    label="Agent reputation"
+                    value={configDraft.agentWeights.reputation}
+                    onChange={(value) => updateAgentWeight("reputation", value)}
+                  />
+                  <ConfigField
+                    label="Agent accuracy"
+                    value={configDraft.agentWeights.accuracy}
+                    onChange={(value) => updateAgentWeight("accuracy", value)}
+                  />
+                  <ConfigField
+                    label="Agent signals"
+                    value={configDraft.agentWeights.signals}
+                    onChange={(value) => updateAgentWeight("signals", value)}
+                  />
+                  <ConfigField
+                    label="Min holder balance"
+                    value={configDraft.eligibility.holderMinBalance}
+                    step={1}
+                    onChange={(value) => updateEligibility("holderMinBalance", value)}
+                  />
+                  <ConfigField
+                    label="Min trader losses"
+                    value={configDraft.eligibility.traderMinLosses}
+                    step={1}
+                    onChange={(value) => updateEligibility("traderMinLosses", value)}
+                  />
+                  <ConfigField
+                    label="Min activity count"
+                    value={configDraft.eligibility.minActivityCount}
+                    step={1}
+                    onChange={(value) => updateEligibility("minActivityCount", value)}
+                  />
+                  <ConfigField
+                    label="Min agent signals"
+                    value={configDraft.eligibility.agentMinSignals}
+                    step={1}
+                    onChange={(value) => updateEligibility("agentMinSignals", value)}
+                  />
+                  <ConfigField
+                    label="Agent epoch lookback"
+                    value={configDraft.eligibility.activeAgentEpochLookback}
+                    step={1}
+                    onChange={(value) => updateEligibility("activeAgentEpochLookback", value)}
+                  />
+                </div>
+              </div>
+
+              {saveMessage && (
+                <p
+                  style={{
+                    margin: "0 0 14px",
+                    fontWeight: 700,
+                    fontSize: "0.84rem",
+                    color: saveMessage.startsWith("Saved") ? "var(--mint)" : "#e11d48",
+                  }}
+                >
+                  {saveMessage}
+                </p>
+              )}
+
+              <button
+                className="admin-button"
+                onClick={() => void saveDistributionConfig()}
+                disabled={savingConfig}
+              >
+                {savingConfig ? "Saving..." : "Save allocation settings"}
+              </button>
+            </>
+          )}
         </article>
       </section>
 
+      {/* Wallet lookup */}
       <section className="card" aria-label="Wallet lookup">
         <div className="section-title" style={{ color: "var(--sky)", margin: 0 }}>
-          Wallet Lookup
+          Wallet lookup
         </div>
         <p className="section-body" style={{ marginTop: "8px" }}>
-          Inspect the raw epoch stats beside the allocation preview for any wallet in the current
+          Compare the raw epoch stats and the allocation preview for any wallet in the current
           batch.
         </p>
 
-        <label htmlFor="addressSelect" className="card-label" style={{ display: "block", marginTop: "16px" }}>
-          Select Address
+        <label
+          htmlFor="addressSelect"
+          className="card-label"
+          style={{ display: "block", marginTop: "16px" }}
+        >
+          Select address
         </label>
         <select
           id="addressSelect"
@@ -917,9 +1006,16 @@ export function DashboardClient(): React.JSX.Element {
               }}
             >
               <div className="card-label" style={{ color: "var(--purple)" }}>
-                Total Allocation
+                Total allocation
               </div>
-              <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "var(--purple)", marginTop: "4px" }}>
+              <div
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: 900,
+                  color: "var(--purple)",
+                  marginTop: "4px",
+                }}
+              >
                 {solFormat(selectedDistribution.totalAllocationSol)}
               </div>
             </div>
@@ -932,11 +1028,18 @@ export function DashboardClient(): React.JSX.Element {
               }}
             >
               <div className="card-label" style={{ color: "var(--sky)" }}>
-                Loss / Volume / Participation
+                Loss / volume / participation
               </div>
-              <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "var(--sky)", marginTop: "6px" }}>
-                {numberFormat(selectedDistribution.metrics.losses)} /{" "}
-                {numberFormat(selectedDistribution.metrics.volume)} /{" "}
+              <div
+                style={{
+                  fontSize: "0.95rem",
+                  fontWeight: 800,
+                  color: "var(--sky)",
+                  marginTop: "6px",
+                }}
+              >
+                {numberFormat(selectedDistribution.metrics.losses)} / {" "}
+                {numberFormat(selectedDistribution.metrics.volume)} / {" "}
                 {numberFormat(selectedDistribution.metrics.participation)}
               </div>
             </div>
@@ -949,10 +1052,17 @@ export function DashboardClient(): React.JSX.Element {
               }}
             >
               <div className="card-label" style={{ color: "var(--mint)" }}>
-                Holder / Trader Breakdown
+                Holder / trader breakdown
               </div>
-              <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "var(--mint)", marginTop: "6px" }}>
-                {solFormat(selectedDistribution.holderAllocationSol)} /{" "}
+              <div
+                style={{
+                  fontSize: "0.95rem",
+                  fontWeight: 800,
+                  color: "var(--mint)",
+                  marginTop: "6px",
+                }}
+              >
+                {solFormat(selectedDistribution.holderAllocationSol)} / {" "}
                 {solFormat(selectedDistribution.traderAllocationSol)}
               </div>
             </div>
@@ -965,9 +1075,16 @@ export function DashboardClient(): React.JSX.Element {
               }}
             >
               <div className="card-label" style={{ color: "var(--peach)" }}>
-                Net Epoch Change
+                Net epoch change
               </div>
-              <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "var(--peach)", marginTop: "4px" }}>
+              <div
+                style={{
+                  fontSize: "1.1rem",
+                  fontWeight: 900,
+                  color: "var(--peach)",
+                  marginTop: "4px",
+                }}
+              >
                 {solFormat(selectedStats.netChange)}
               </div>
             </div>
@@ -975,8 +1092,8 @@ export function DashboardClient(): React.JSX.Element {
         )}
 
         <p className="footer-note">
-          Preview values are derived directly from the latest epoch summary and the current
-          distribution config saved in <code>data/distribution-config.json</code>.
+          Preview values are calculated from the latest epoch summary and the current distribution
+          config in <code>data/distribution-config.json</code>.
         </p>
       </section>
     </main>
